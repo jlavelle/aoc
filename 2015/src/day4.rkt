@@ -10,11 +10,11 @@
   (md5 (open-input-string (string-append i (number->string n)))))
 
 (define (leading-zeros-hash? h n)
-  (foldl (λ (a b) (and a b)) #t (map (λ (x) (eq? x #\0)) (take (string->list h) n))))
+  (= n (count (λ (x) (eq? x #\0)) (take (string->list h) n))))
 
-(define (zero-hashes num-zeroes)
+(define (zero-hashes num-zeros)
   (for/stream ([n (in-naturals)]
-               #:when (leading-zeros-hash? (hash input n) num-zeroes))
+               #:when (leading-zeros-hash? (hash input n) num-zeros))
     n))
 
 (define (solve1) (stream-first (zero-hashes 5)))
