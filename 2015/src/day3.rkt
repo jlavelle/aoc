@@ -14,7 +14,7 @@
 
 (define (santas-route route [santas 1])
   (for/fold ([locations (map (const (cons 0 0)) (range santas))]
-             [visited (make-immutable-hash [list (cons (cons 0 0) santas)])])
+             [visited (hash (cons 0 0) santas)])
             ([x route]
              [i (range (length route))])
     (let* ([current-santa
