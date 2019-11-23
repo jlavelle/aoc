@@ -48,8 +48,7 @@
 (define solve2-spec
   (action-spec
    add1
-   (λ (x) (let ([xp (sub1 x)])
-            (if (> 0 xp) 0 xp)))
+   (λ (x) (max (sub1 x) 0))
    (λ (x) (+ x 2))))
 
 (define (solve1)
