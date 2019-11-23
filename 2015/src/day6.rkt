@@ -8,23 +8,23 @@
 (struct action-spec (on off toggle) #:transparent)
 (struct rect (x1 y1 x2 y2) #:transparent)
 
+(define (parse-line as l)
+  (match-define (list* _ action coords)
+    (regexp-match #px"^(.*?) (\\d+),(\\d+) through (\\d+),(\\d+)$" l))
+  (define proc
+    (case action
+      [("turn on") (action-spec-on as)]
+      [("turn off") (action-spec-off as)]
+      [else (action-spec-toggle as)]))
+  (instruction proc (apply rect (map string->number coords))))
+
+(define (parse-input-with as in)
+  (filter-map (curry parse-line as) in))
+
 (define (in-rect r)
   (for*/stream ([x (in-range (rect-x1 r) (+ 1 (rect-x2 r)))]
                 [y (in-range (rect-y1 r) (+ 1 (rect-y2 r)))])
     (cons x y)))
-
-(define (parse-line as l)
-  (define (make-instr proc c1 c2)
-    (match* ((string-split c1 ",") (string-split c2 ","))
-      [((list x1 y1) (list x2 y2)) (instruction proc (apply rect (map string->number (list x1 y1 x2 y2))))]))
-  (match (string-split l)
-    [(list "toggle" c1 _ c2) (make-instr (action-spec-toggle as) c1 c2)]
-    [(list _ "on" c1 _ c2) (make-instr (action-spec-on as) c1 c2)]
-    [(list _ "off" c1 _ c2) (make-instr (action-spec-off as) c1 c2)]
-    [_ #f]))
-
-(define (parse-input-with as in)
-  (filter-map (curry parse-line as) in))
 
 (define (lights w h init instrs)
   (define grid (make-vector (* w h) init))
