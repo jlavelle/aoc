@@ -19,7 +19,7 @@
   (instruction proc (apply rect (map string->number coords))))
 
 (define (parse-input-with as in)
-  (filter-map (curry parse-line as) in))
+  (map (curry parse-line as) in))
 
 (define (in-rect r)
   (for*/stream ([x (in-range (rect-x1 r) (+ 1 (rect-x2 r)))]
