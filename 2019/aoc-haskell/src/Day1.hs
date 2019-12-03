@@ -1,13 +1,11 @@
- module Day1 where
-{-# LANGUAGE BlockArguments #-}
+module Day1 where
 
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Read as T
-import Data.Either (fromRight)
 import Data.Monoid (Sum(..))
-import Data.Foldable (traverse_, fold)
+import Data.Foldable (traverse_)
 import Data.List (unfoldr)
 
 fuelReq :: Integral a => a -> a
@@ -18,9 +16,6 @@ fuelFuelReq = foldr (+) 0 . unfoldr go . fuelReq
   where
     go x | x <= 0    = Nothing
          | otherwise = Just (x, fuelReq x)
-
-parseInput :: IO (Either String [Int])
-parseInput = traverse (fmap fst . T.decimal) . T.lines <$> T.readFile "inputs/day1"
 
 solve1 :: (Foldable f, Integral a) => f a -> Sum a
 solve1 = foldMap (Sum . fuelReq)
@@ -35,3 +30,7 @@ solutions = do
   ei <- parseInput
   traverse_ (print . solve1) ei
   traverse_ (print . solve2) ei
+
+-- TODO Utility module
+parseInput :: IO (Either String [Int])
+parseInput = traverse (fmap fst . T.decimal) . T.lines <$> T.readFile "inputs/day1"

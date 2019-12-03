@@ -24,6 +24,12 @@ dependencies:
 - text
 - bytestring
 - containers
+- microlens
+
+default-extensions:
+- LambdaCase
+- BlockArguments
+- OverloadedStrings
 
 library:
   source-dirs: src
