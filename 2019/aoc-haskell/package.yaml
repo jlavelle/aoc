@@ -30,6 +30,7 @@ default-extensions:
 - LambdaCase
 - BlockArguments
 - OverloadedStrings
+- FlexibleContexts
 
 library:
   source-dirs: src

@@ -1,6 +1,6 @@
 module Main where
 
-import Lib
+import qualified Day3
 
 main :: IO ()
-main = someFunc
+main = Day3.solutions
