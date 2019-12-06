@@ -6,6 +6,7 @@ import Data.Align (alignWith)
 import Data.These (these)
 import Lens.Micro ((&), _1, (%~), (<&>))
 import Util (digits)
+import Data.Bool (bool)
 
 data Mode = Immediate | Position
   deriving Show
@@ -19,6 +20,10 @@ data OpCode
   | Input
   | Output
   | Halt
+  | JumpIfTrue
+  | JumpIfFalse
+  | LessThan
+  | Equals
   deriving Show
 
 data Op = Op OpCode [Mode]
@@ -55,6 +60,10 @@ parseOp i =
     [2] -> Op Mul <$> modes 3
     [3] -> Op Input <$> modes 1
     [4] -> Op Output <$> modes 1
+    [5] -> Op JumpIfTrue <$> modes 2
+    [6] -> Op JumpIfFalse <$> modes 2
+    [7] -> Op LessThan <$> modes 3
+    [8] -> Op Equals <$> modes 3
     [9,9] -> Right $ Op Halt []
     _ -> Left $ "Unknown op code " <> show ds
 
@@ -81,33 +90,44 @@ interpret is h =
   in step $ ICState h mem 0
 
 step :: ICState -> Either String ICState
-step s@(ICState h m p) = do
+step s@(ICState _ m p) = do
   Op c ms <- lookupE p m >>= parseOp
   pvs <- traverse (flip lookupE m) [p + 1..p + length ms]
   let params = zipWith Param ms pvs
   case c of
     Halt -> pure s
     _    -> do
-      (h', m') <- handleOp c params h m
-      step $ ICState h' m' $ p + length ms + 1
+      s' <- handleOp c params s
+      step s'
 
-handleOp :: OpCode -> [Param] -> Handle -> IntMap Int -> Either String (Handle, IntMap Int)
-handleOp o ps h m = case (o, ps) of
-  (Add, [a, b, c]) -> update (+) a b c m <&> (h,)
-  (Mul, [a, b, c]) -> update (*) a b c m <&> (h,)
+handleOp :: OpCode -> [Param] -> ICState -> Either String ICState
+handleOp o ps (ICState h m p) = case (o, ps) of
+  (Add, [a, b, c]) -> update (+) a b c
+  (Mul, [a, b, c]) -> update (*) a b c
   (Input, [Param Position x]) -> do
     (v, h') <- readInput h
     let m' = IntMap.insert x v m
-    pure (h', m')
-  (Output, [a]) -> handleParam a m <&> \ov -> (writeOutput ov h, m)
+    pure $ ICState h' m' (p + 2)
+  (Output, [a]) -> handleParam a <&> \ov -> ICState (writeOutput ov h) m (p + 2)
+  (JumpIfTrue, [a, b]) -> jump True a b
+  (JumpIfFalse, [a, b]) -> jump False a b
+  (LessThan, [a, b, c]) -> update (\x y -> bool 0 1 $ x < y) a b c
+  (Equals, [a, b, c]) -> update (\x y -> bool 0 1 $ x == y) a b c
   (Halt, _) -> Left "Halted"
   (x, xs) -> Left $ "Invalid params for op " <> show x <>": " <> show xs
   where
-    update f a b (Param Position c) mem = do
-      av <- handleParam a mem
-      bv <- handleParam b mem
-      pure $ IntMap.insert c (f av bv) mem
-    update _ _ _ (Param Immediate _) _ = Left "Unexpected Immediate param in update"
+    update f a b (Param Position c) = do
+      av <- handleParam a
+      bv <- handleParam b
+      let m' = IntMap.insert c (f av bv) m
+      pure $ ICState h m' (p + 4)
+    update _ _ _ (Param Immediate _) = Left "Unexpected Immediate param in update"
 
-    handleParam (Param Immediate x) _ = Right x
-    handleParam (Param Position x) mem = lookupE x mem
+    jump t a b = do
+      av <- handleParam a
+      bv <- handleParam b
+      let p' = bool (p + 3) bv $ bool (== 0) (/= 0) t av
+      pure $ ICState h m p'
+
+    handleParam (Param Immediate x) = Right x
+    handleParam (Param Position x)  = lookupE x m
