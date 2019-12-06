@@ -9,8 +9,6 @@ import qualified Data.Text.IO as T
 import Lens.Micro (over, _1, _2, (%~), (&), (<&>))
 import Data.List (unfoldr)
 import Data.Bitraversable (bisequence)
-import Data.Foldable (minimumBy)
-import Data.Ord (comparing)
 
 type WireNetwork = Map (Int, Int) Segment
 
@@ -59,20 +57,21 @@ toNetwork xs = foldr (\(p, l) -> Map.insert p (Segment 1 [l])) Map.empty $ unfol
 dist :: (Int, Int) -> (Int, Int) -> Int
 dist (a, b) (c, d) = abs (c - a) + abs (d - b)
 
+netIntersect :: [[Node]] -> WireNetwork
+netIntersect = Map.filter ((>= 2) . intersections)
+             . Map.unionsWith (<>)
+             . fmap toNetwork
+
 solve1 :: [[Node]] -> Int
 solve1 = minimum
        . fmap (dist (0, 0))
        . Map.keys 
-       . Map.filter ((>= 2) . intersections)
-       . Map.unionsWith (<>) 
-       . fmap toNetwork
+       . netIntersect
 
 solve2 :: [[Node]] -> Int
 solve2 = minimum
        . fmap (sum . lengths)
-       . Map.filter ((>= 2) . intersections)
-       . Map.unionsWith (<>)
-       . fmap toNetwork
+       . netIntersect
 
 parseInput :: Text -> Either String [[Node]]
 parseInput = traverse (traverse parseNode . T.splitOn ",") . T.lines

@@ -2,14 +2,7 @@ module Day4 where
 
 import Data.List (groupBy)
 import Data.Monoid (All(..))
-
-digits :: Integral a => a -> [a]
-digits = loop []
-  where
-    loop acc 0 = acc
-    loop acc n =
-      let (q, r) = quotRem n 10
-      in loop (r : acc) q
+import Util (digits)
 
 validPasswords :: [[Int] -> Bool] -> (Int, Int) -> [Int]
 validPasswords rules (l, u) = [ x | x <- [l..u], valid x ]

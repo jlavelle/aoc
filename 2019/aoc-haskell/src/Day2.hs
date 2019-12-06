@@ -1,51 +1,19 @@
 module Day2 where
 
 import qualified Data.IntMap as IntMap
-import Data.List (unfoldr)
-import Data.Foldable (foldl')
 import Lens.Micro ((&), (.~), ix)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 import qualified Data.Text.IO as T
-
-data Op
-  = Add Int Int Int
-  | Mul Int Int Int
-  deriving Show
-
-toProgram :: [Int] -> [Op]
-toProgram is = unfoldr go is
-  where
-    go []     = Nothing
-    go (99:_) = Nothing
-    go as = case take 4 as of
-      (a:b:c:d:_) | a == 1 -> Just (Add b c d, drop 4 as)
-                  | a == 2 -> Just (Mul b c d, drop 4 as)
-                  | otherwise -> Nothing
-      _ -> Nothing
-
-interpret :: [Int] -> Maybe Int
-interpret xs = 
-  let mem  = IntMap.fromList $ zip [0..] xs
-      prog = toProgram xs
-      res  = foldl' go (Just mem) prog
-  in res >>= IntMap.lookup 0
-  where
-    go acc = \case
-      Add a b c -> update (+) a b c acc
-      Mul a b c -> update (*) a b c acc
-
-    update f a b c mmem = do
-      mem <- mmem
-      av  <- IntMap.lookup a mem
-      bv  <- IntMap.lookup b mem
-      pure $ IntMap.insert c (f av bv) mem
+import IntCode (interpret, defaultHandle, ICState(..))
+import Control.Monad (join)
 
 interpretNounVerb :: [Int] -> Int -> Int -> Maybe Int
-interpretNounVerb xs n v = interpret is
+interpretNounVerb xs n v = join $ p0 $ interpret is defaultHandle
   where
     is = xs & ix 1 .~ n
             & ix 2 .~ v
+    p0 = either (const Nothing) Just . fmap (IntMap.lookup 0 . memory)
 
 solve1 :: [Int] -> Maybe Int
 solve1 xs = interpretNounVerb xs 12 2

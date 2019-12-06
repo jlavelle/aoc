@@ -25,12 +25,15 @@ dependencies:
 - bytestring
 - containers
 - microlens
+- semialign
+- these
 
 default-extensions:
 - LambdaCase
 - BlockArguments
 - OverloadedStrings
 - FlexibleContexts
+- TupleSections
 
 library:
   source-dirs: src
