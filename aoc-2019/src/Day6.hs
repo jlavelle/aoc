@@ -14,12 +14,13 @@ import Data.Ord (comparing)
 import Criterion.Main
 
 solve1 :: AdjacencyMap Text -> Int
-solve1 = sum . tail . fst . foldTree go . head . G.dfsForestFrom ["COM"]
+solve1 = fst . foldTree go . head . G.dfsForestFrom ["COM"]
   where
-    go _ [] = ([1], 1)
-    go _ xs =
+    go _ [] = (1, 1)
+    go l xs =
       let (cs, s) = unzip xs
-      in (sum s + 1 : fold cs, sum s + 1)
+          s' = if l == "COM" then 0 else sum s + 1
+      in (s' + sum cs, sum s + 1)
 
 solve2 :: AdjacencyMap Text -> Maybe Int
 solve2 = fmap (subtract 3 . length) . pathFromTo "YOU" "SAN"
