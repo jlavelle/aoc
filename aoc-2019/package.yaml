@@ -27,6 +27,9 @@ dependencies:
 - microlens
 - semialign
 - these
+- recursion-schemes
+- algebraic-graphs
+- criterion
 
 default-extensions:
 - LambdaCase
