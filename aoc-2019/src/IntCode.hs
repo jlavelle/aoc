@@ -30,8 +30,8 @@ data Op = Op OpCode [Mode]
   deriving Show
 
 data Handle = Handle
-  { input  :: ![Int]
-  , output :: ![Int]
+  { input  :: [Int]
+  , output :: [Int]
   }
 
 data ICState = ICState
@@ -44,11 +44,6 @@ parseMode :: Int -> Either String Mode
 parseMode 0 = Right Position
 parseMode 1 = Right Immediate
 parseMode n = Left $ "Unknown mode " <> show n
-
-parseParams :: [Mode] -> [Int] -> Maybe [Param]
-parseParams ms xs = sequenceA $ alignWith mkParam (reverse ms) (reverse xs)
-  where
-    mkParam = these (const Nothing) (Just . Param Position) ((Just .) . Param)
 
 parseOp :: Int -> Either String Op
 parseOp i =
