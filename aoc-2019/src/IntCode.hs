@@ -10,6 +10,12 @@ import Data.Bool (bool)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 import qualified Data.Text.IO as T
+import Pipes (Pipe, (>->))
+import qualified Pipes as P
+import qualified Pipes.Prelude as P
+import Control.Monad.Except (ExceptT, throwError, liftEither, runExceptT)
+import Data.Functor.Identity (runIdentity)
+import Data.Functor (($>))
 
 data Mode = Immediate | Position
   deriving Show
@@ -32,14 +38,8 @@ data OpCode
 data Op = Op OpCode [Mode]
   deriving Show
 
-data Handle = Handle
-  { input  :: [Int]
-  , output :: [Int]
-  }
-
 data ICState = ICState
-  { handle  :: Handle
-  , memory  :: (IntMap Int)
+  { memory  :: (IntMap Int)
   , pointer :: !Int
   }
 
@@ -75,31 +75,27 @@ parseProgram' = fmap Program . traverse parseInt . T.splitOn ","
   where
     parseInt = fmap fst . T.signed T.decimal
 
-defaultHandle :: Handle
-defaultHandle = Handle [] []
+lookupE :: Monad m => Int -> IntMap a -> InterpretM m a
+lookupE i m = liftEither
+            $ maybe (Left $ "Position " <> show i <> " not found") Right
+            $ IntMap.lookup i m
 
-readInput :: Handle -> Either String (Int, Handle)
-readInput (Handle i o) = case i of
-  []   -> Left "Out of input"
-  x:xs -> Right (x, Handle xs o)
+interpretP :: Program -> [Int] -> Either String ([Int], ICState)
+interpretP p inp = run $ (P.each inp $> initState p) >-> interpret p
+  where
+    run = runIdentity . runExceptT . P.toListM'
 
-writeOutput :: Int -> Handle -> Handle
-writeOutput o (Handle i os) = Handle i (o:os)
+initState :: Program -> ICState
+initState (Program is) = ICState (IntMap.fromAscList $ zip [0..] is) 0
 
-movePointer :: (Int -> Int) -> ICState -> ICState
-movePointer f ics = ics { pointer = f $ pointer ics }
+type InterpretM m a = Pipe Int Int (ExceptT String m) a
 
-lookupE :: Int -> IntMap a -> Either String a
-lookupE i m = maybe (Left $ "Position " <> show i <> " not found") Right $ IntMap.lookup i m
+interpret :: Monad m => Program -> InterpretM m ICState
+interpret = step . initState
 
-interpret :: Program -> Handle -> Either String ICState
-interpret (Program is) h =
-  let mem = IntMap.fromAscList $ zip [0..] is
-  in step $ ICState h mem 0
-
-step :: ICState -> Either String ICState
-step s@(ICState _ m p) = do
-  Op c ms <- lookupE p m >>= parseOp
+step :: Monad m => ICState -> InterpretM m ICState
+step s@(ICState m p) = do
+  Op c ms <- lookupE p m >>= liftEither . parseOp
   pvs <- traverse (flip lookupE m) [p + 1..p + length ms]
   let params = zipWith Param ms pvs
   case c of
@@ -108,34 +104,37 @@ step s@(ICState _ m p) = do
       s' <- handleOp c params s
       step s'
 
-handleOp :: OpCode -> [Param] -> ICState -> Either String ICState
-handleOp o ps (ICState h m p) = case (o, ps) of
+handleOp :: Monad m => OpCode -> [Param] -> ICState -> InterpretM m ICState
+handleOp o ps (ICState m p) = case (o, ps) of
   (Add, [a, b, c]) -> update (+) a b c
   (Mul, [a, b, c]) -> update (*) a b c
   (Input, [Param Position x]) -> do
-    (v, h') <- readInput h
+    v <- P.await
     let m' = IntMap.insert x v m
-    pure $ ICState h' m' (p + 2)
-  (Output, [a]) -> handleParam a <&> \ov -> ICState (writeOutput ov h) m (p + 2)
+    pure $ ICState m' (p + 2)
+  (Output, [a]) -> do
+    v <- handleParam a
+    P.yield v
+    pure $ ICState m (p + 2)
   (JumpIfTrue, [a, b]) -> jump True a b
   (JumpIfFalse, [a, b]) -> jump False a b
   (LessThan, [a, b, c]) -> update (\x y -> bool 0 1 $ x < y) a b c
   (Equals, [a, b, c]) -> update (\x y -> bool 0 1 $ x == y) a b c
-  (Halt, _) -> Left "Halted"
-  (x, xs) -> Left $ "Invalid params for op " <> show x <>": " <> show xs
+  (Halt, _) -> throwError "Uncaught Halt"
+  (x, xs) -> throwError $ "Invalid params for op " <> show x <>": " <> show xs
   where
     update f a b (Param Position c) = do
       av <- handleParam a
       bv <- handleParam b
       let m' = IntMap.insert c (f av bv) m
-      pure $ ICState h m' (p + 4)
-    update _ _ _ (Param Immediate _) = Left "Unexpected Immediate param in update"
+      pure $ ICState m' (p + 4)
+    update _ _ _ (Param Immediate _) = throwError "Unexpected Immediate param in update"
 
     jump t a b = do
       av <- handleParam a
       bv <- handleParam b
       let p' = bool (p + 3) bv $ bool (== 0) (/= 0) t av
-      pure $ ICState h m p'
+      pure $ ICState m p'
 
-    handleParam (Param Immediate x) = Right x
+    handleParam (Param Immediate x) = liftEither $ Right x
     handleParam (Param Position x)  = lookupE x m

@@ -1,9 +1,9 @@
 module Day5 where
 
-import IntCode (interpret, ICState(..), Handle(..), Program, defaultHandle, parseProgram)
+import IntCode (interpretP, Program, parseProgram)
 
 diagnostic :: [Int] -> Program -> Either String [Int]
-diagnostic i p = fmap (output . handle) $ interpret p $ defaultHandle { input = i }
+diagnostic i p = fmap fst $ interpretP p i
 
 solve1 :: Program -> Either String [Int]
 solve1 = diagnostic [1]
