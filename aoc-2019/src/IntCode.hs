@@ -7,6 +7,9 @@ import Data.These (these)
 import Lens.Micro ((&), _1, (%~), (<&>))
 import Util (digits)
 import Data.Bool (bool)
+import qualified Data.Text as T
+import qualified Data.Text.Read as T
+import qualified Data.Text.IO as T
 
 data Mode = Immediate | Position
   deriving Show
@@ -40,6 +43,8 @@ data ICState = ICState
   , pointer :: !Int
   }
 
+newtype Program = Program [Int]
+
 parseMode :: Int -> Either String Mode
 parseMode 0 = Right Position
 parseMode 1 = Right Immediate
@@ -62,6 +67,14 @@ parseOp i =
     [9,9] -> Right $ Op Halt []
     _ -> Left $ "Unknown op code " <> show ds
 
+parseProgram :: FilePath -> IO (Either String Program)
+parseProgram = fmap parseProgram' . T.readFile
+
+parseProgram' :: T.Text -> Either String Program
+parseProgram' = fmap Program . traverse parseInt . T.splitOn ","
+  where
+    parseInt = fmap fst . T.signed T.decimal
+
 defaultHandle :: Handle
 defaultHandle = Handle [] []
 
@@ -79,8 +92,8 @@ movePointer f ics = ics { pointer = f $ pointer ics }
 lookupE :: Int -> IntMap a -> Either String a
 lookupE i m = maybe (Left $ "Position " <> show i <> " not found") Right $ IntMap.lookup i m
 
-interpret :: [Int] -> Handle -> Either String ICState
-interpret is h =
+interpret :: Program -> Handle -> Either String ICState
+interpret (Program is) h =
   let mem = IntMap.fromAscList $ zip [0..] is
   in step $ ICState h mem 0
 

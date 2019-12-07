@@ -31,6 +31,7 @@ dependencies:
 - algebraic-graphs
 - criterion
 - comonad
+- foldl
 
 default-extensions:
 - LambdaCase

@@ -1,24 +1,18 @@
 module Day5 where
 
-import IntCode (interpret, ICState(..), Handle(..), defaultHandle)
-import qualified Data.Text as T
-import qualified Data.Text.Read as T
-import qualified Data.Text.IO as T
+import IntCode (interpret, ICState(..), Handle(..), Program, defaultHandle, parseProgram)
 
-diagnostic :: [Int] -> [Int] -> Either String [Int]
+diagnostic :: [Int] -> Program -> Either String [Int]
 diagnostic i p = fmap (output . handle) $ interpret p $ defaultHandle { input = i }
 
-solve1 :: [Int] -> Either String [Int]
+solve1 :: Program -> Either String [Int]
 solve1 = diagnostic [1]
 
-solve2 :: [Int] -> Either String [Int]
+solve2 :: Program -> Either String [Int]
 solve2 = diagnostic [5]
 
 solutions :: IO ()
 solutions = do
-  i <- parseInput
+  i <- parseProgram "inputs/day5"
   print $ solve1 =<< i
   print $ solve2 =<< i
-
-parseInput :: IO (Either String [Int])
-parseInput = traverse (fmap fst . T.signed T.decimal) . T.splitOn "," <$> T.readFile "inputs/day5"
