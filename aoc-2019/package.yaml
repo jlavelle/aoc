@@ -32,8 +32,6 @@ dependencies:
 - criterion
 - comonad
 - foldl
-- pipes
-- mtl
 
 default-extensions:
 - LambdaCase

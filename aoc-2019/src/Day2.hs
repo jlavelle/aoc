@@ -2,14 +2,14 @@ module Day2 where
 
 import qualified Data.IntMap as IntMap
 import Lens.Micro ((&), (.~), ix)
-import IntCode (interpretP, ICState(..), Program(..), parseProgram)
+import IntCode (interpret, defaultHandle, ICState(..), Program(..), parseProgram)
 
 interpretNounVerb :: Program -> Int -> Int -> Maybe Int
-interpretNounVerb (Program xs) n v = p0 $ interpretP (Program is) []
+interpretNounVerb (Program xs) n v = p0 $ interpret (Program is) defaultHandle
   where
     is = xs & ix 1 .~ n
             & ix 2 .~ v
-    p0 = either (const Nothing) id . fmap (IntMap.lookup 0 . memory . snd)
+    p0 = either (const Nothing) id . fmap (IntMap.lookup 0 . memory)
 
 solve1 :: Program -> Maybe Int
 solve1 xs = interpretNounVerb xs 12 2
@@ -30,4 +30,3 @@ solutions = do
   i <- parseProgram "inputs/day2"
   print $ solve1 <$> i
   print $ solve2 <$> i
-

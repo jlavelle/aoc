@@ -1,12 +1,12 @@
 module Day7 where
 
-import IntCode (Program, interpretP, parseProgram, parseProgram')
+import IntCode (Program, interpret, Handle(..), ICState(..), parseProgram, parseProgram')
 import Data.Functor ((<&>))
 import Control.Foldl (EndoM(..))
 import Data.List (permutations)
 
 mkPipe :: Program -> [Int] -> Either String [Int]
-mkPipe p i = interpretP p i <&> fst
+mkPipe p i = interpret p (Handle i []) <&> reverse . output . handle
 
 programs :: Program -> [[Int] -> Either String [Int]]
 programs prog = fmap (appEndoM . foldMap go) (permutations [0..4])
