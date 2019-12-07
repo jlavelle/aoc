@@ -7,31 +7,31 @@ import Lens.Micro (over, _2)
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
 import qualified Algebra.Graph.AdjacencyMap as AM
 import qualified Algebra.Graph.ToGraph as G
-import Data.Tree (foldTree)
+import Data.Tree (foldTree, Tree(..))
 import Data.Maybe (catMaybes)
-import Data.Foldable (fold, minimumBy)
-import Data.Ord (comparing)
+import Data.Foldable (fold)
 import Criterion.Main
+import Data.Semigroup (Sum)
 
-solve1 :: AdjacencyMap Text -> Int
-solve1 = fst . foldTree go . head . G.dfsForestFrom ["COM"]
-  where
-    go _ [] = (1, 1)
-    go l xs =
-      let (cs, s) = unzip xs
-          s' = if l == "COM" then 0 else sum s + 1
-      in (s' + sum cs, sum s + 1)
+solve1 :: AdjacencyMap Text -> Sum Int
+solve1 = foldMap sumDepths . subForest . head . G.dfsForestFrom ["COM"]
 
 solve2 :: AdjacencyMap Text -> Maybe Int
-solve2 = fmap (subtract 3 . length) . pathFromTo "YOU" "SAN"
+solve2 = fmap (subtract 3 . length) . pathTo "SAN" . head . G.dfsForestFrom ["YOU"]
 
-pathFromTo :: Ord a => a -> a -> AdjacencyMap a -> Maybe [a]
-pathFromTo from to = foldTree go . head . G.dfsForestFrom [from]
+pathTo :: Ord a => a -> Tree a -> Maybe [a]
+pathTo to = foldTree go
   where
     go x xs | x == to   = Just [x]
             | otherwise = case catMaybes xs of
                 [] -> Nothing
-                zs -> Just $ x : minimumBy (comparing length) zs
+                zs -> Just $ x : fold zs
+
+sumDepths :: Tree a -> Sum Int
+sumDepths = fst . foldTree go
+  where
+    go _ [] = (1, 1)
+    go _ xs = let (cs, s) = fold xs in (1 + s + cs, 1 + s)
 
 parseAM :: Text -> AdjacencyMap Text
 parseAM t = let gr = go t in AM.overlay gr $ AM.transpose gr

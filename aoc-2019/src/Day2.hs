@@ -6,14 +6,13 @@ import qualified Data.Text as T
 import qualified Data.Text.Read as T
 import qualified Data.Text.IO as T
 import IntCode (interpret, defaultHandle, ICState(..))
-import Control.Monad (join)
 
 interpretNounVerb :: [Int] -> Int -> Int -> Maybe Int
-interpretNounVerb xs n v = join $ p0 $ interpret is defaultHandle
+interpretNounVerb xs n v = p0 $ interpret is defaultHandle
   where
     is = xs & ix 1 .~ n
             & ix 2 .~ v
-    p0 = either (const Nothing) Just . fmap (IntMap.lookup 0 . memory)
+    p0 = either (const Nothing) id . fmap (IntMap.lookup 0 . memory)
 
 solve1 :: [Int] -> Maybe Int
 solve1 xs = interpretNounVerb xs 12 2

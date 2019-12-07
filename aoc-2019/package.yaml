@@ -30,6 +30,7 @@ dependencies:
 - recursion-schemes
 - algebraic-graphs
 - criterion
+- comonad
 
 default-extensions:
 - LambdaCase
