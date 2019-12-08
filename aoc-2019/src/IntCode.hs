@@ -4,7 +4,7 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import Data.Align (alignWith)
 import Data.These (these)
-import Lens.Micro ((&), _1, (%~), (<&>), (^?), ix)
+import Lens.Micro ((&), _1, (%~), (<&>))
 import Util (digits)
 import Data.Bool (bool)
 import qualified Data.Text as T

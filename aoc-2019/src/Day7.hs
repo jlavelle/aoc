@@ -1,35 +1,30 @@
-{-# LANGUAGE RecursiveDo #-}
-
 module Day7 where
 
 import IntCode (Program, interpret, ICState(..), parseProgram, parseProgram')
 import Data.Functor ((<&>))
 import Control.Foldl (EndoM(..))
 import Data.List (permutations)
-import Data.Traversable (for)
+import Data.Profunctor (lmap)
+import Control.Monad.Fix (mfix)
 
 mkPipe :: Program -> [Int] -> Either String [Int]
 mkPipe p i = interpret p i <&> reverse . output
 
-programs :: Program -> [[Int] -> Either String [Int]]
-programs prog = fmap (appEndoM . foldMap go) (permutations [0..4])
+programs :: [Int] -> Program -> [[Int] -> Either String [Int]]
+programs ps prog = fmap (appEndoM . foldMap go) (permutations ps)
   where
-    go p = EndoM $ addPhase p $ mkPipe prog
-    addPhase i f = f . (i:)
+    go i = EndoM $ lmap (i:) $ mkPipe prog
 
-solve2 :: Program -> Int
-solve2 p = maximum (handlePerm <$> permutations [5..9])
-  where
-    handlePerm (a:b:c:d:e:_) =
-      let (Right o1) = mkPipe p (a:0:o5)
-          (Right o2) = mkPipe p (b:o1)
-          (Right o3) = mkPipe p (c:o2)
-          (Right o4) = mkPipe p (d:o3)
-          (Right o5) = mkPipe p (e:o4)
-      in o5 !! (length o5 - 1)
+maxAmp :: [[Int] -> Either String [Int]] -> Either String Int
+maxAmp = fmap maximum . traverse (fmap last . ($ [0]))
 
 solve1 :: Program -> Either String Int
-solve1 = fmap maximum . traverse (fmap head . ($ [0])) . programs
+solve1 = maxAmp . programs [0..4]
+
+solve2 :: Program -> Either String Int
+solve2 = maxAmp . fmap loopPipe . programs [5..9]
+  where
+    loopPipe p i = mfix \out -> p (i <> out)
 
 test1 :: Program
 test1 =
@@ -45,4 +40,4 @@ solutions :: IO ()
 solutions = do
   i <- parseProgram "inputs/day7"
   print $ solve1 =<< i
-  print $ solve2 <$> i
+  print $ solve2 =<< i

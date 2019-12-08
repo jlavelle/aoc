@@ -32,6 +32,7 @@ dependencies:
 - criterion
 - comonad
 - foldl
+- profunctors
 
 default-extensions:
 - LambdaCase
