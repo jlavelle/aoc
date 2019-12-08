@@ -11,7 +11,7 @@ mkPipe :: Program -> [Int] -> Either String [Int]
 mkPipe p i = interpret p i <&> reverse . output
 
 programs :: [Int] -> Program -> [[Int] -> Either String [Int]]
-programs ps prog = fmap (appEndoM . foldMap go) (permutations ps)
+programs ps prog = fmap (appEndoM . foldMap go) $ permutations ps
   where
     go i = EndoM $ lmap (i:) $ mkPipe prog
 
