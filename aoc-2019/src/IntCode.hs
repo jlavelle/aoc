@@ -1,10 +1,10 @@
 module IntCode where
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq
 import Data.Align (alignWith)
 import Data.These (these)
-import Lens.Micro ((&), _1, (%~), (<&>))
+import Lens.Micro ((&), _1, (%~), (<&>), (^?), ix)
 import Util (digits)
 import Data.Bool (bool)
 import qualified Data.Text as T
@@ -32,15 +32,11 @@ data OpCode
 data Op = Op OpCode [Mode]
   deriving Show
 
-data Handle = Handle
-  { input  :: [Int]
-  , output :: [Int]
-  }
-
 data ICState = ICState
-  { handle  :: Handle
-  , memory  :: (IntMap Int)
-  , pointer :: !Int
+  { input    :: [Int]
+  , output   :: [Int]
+  , memory   :: Seq Int
+  , pointer  :: Int
   }
 
 newtype Program = Program [Int]
@@ -75,32 +71,18 @@ parseProgram' = fmap Program . traverse parseInt . T.splitOn ","
   where
     parseInt = fmap fst . T.signed T.decimal
 
-defaultHandle :: Handle
-defaultHandle = Handle [] []
-
-readInput :: Handle -> Either String (Int, Handle)
-readInput (Handle i o) = case i of
-  []   -> Left "Out of input"
-  x:xs -> Right (x, Handle xs o)
-
-writeOutput :: Int -> Handle -> Handle
-writeOutput o (Handle i os) = Handle i (o:os)
-
 movePointer :: (Int -> Int) -> ICState -> ICState
 movePointer f ics = ics { pointer = f $ pointer ics }
 
-lookupE :: Int -> IntMap a -> Either String a
-lookupE i m = maybe (Left $ "Position " <> show i <> " not found") Right $ IntMap.lookup i m
-
-interpret :: Program -> Handle -> Either String ICState
+interpret :: Program -> [Int] -> Either String ICState
 interpret (Program is) h =
-  let mem = IntMap.fromAscList $ zip [0..] is
-  in step $ ICState h mem 0
+  let mem = Seq.fromList is
+  in step $ ICState h [] mem 0
 
 step :: ICState -> Either String ICState
-step s@(ICState _ m p) = do
-  Op c ms <- lookupE p m >>= parseOp
-  pvs <- traverse (flip lookupE m) [p + 1..p + length ms]
+step s@(ICState _ _ m p) = do
+  Op c ms <- parseOp $ Seq.index m p
+  let pvs = Seq.index m <$> [p + 1..p + length ms]
   let params = zipWith Param ms pvs
   case c of
     Halt -> pure s
@@ -109,14 +91,14 @@ step s@(ICState _ m p) = do
       step s'
 
 handleOp :: OpCode -> [Param] -> ICState -> Either String ICState
-handleOp o ps (ICState h m p) = case (o, ps) of
+handleOp op ps (ICState i o m p) = case (op, ps) of
   (Add, [a, b, c]) -> update (+) a b c
   (Mul, [a, b, c]) -> update (*) a b c
   (Input, [Param Position x]) -> do
-    (v, h') <- readInput h
-    let m' = IntMap.insert x v m
-    pure $ ICState h' m' (p + 2)
-  (Output, [a]) -> handleParam a <&> \ov -> ICState (writeOutput ov h) m (p + 2)
+    let v = head i
+    let m' = Seq.update x v m
+    pure $ ICState (tail i) o m' (p + 2)
+  (Output, [a]) -> let v = handleParam a m in Right $ ICState i (v:o) m (p + 2)
   (JumpIfTrue, [a, b]) -> jump True a b
   (JumpIfFalse, [a, b]) -> jump False a b
   (LessThan, [a, b, c]) -> update (\x y -> bool 0 1 $ x < y) a b c
@@ -125,17 +107,18 @@ handleOp o ps (ICState h m p) = case (o, ps) of
   (x, xs) -> Left $ "Invalid params for op " <> show x <>": " <> show xs
   where
     update f a b (Param Position c) = do
-      av <- handleParam a
-      bv <- handleParam b
-      let m' = IntMap.insert c (f av bv) m
-      pure $ ICState h m' (p + 4)
+      let av = handleParam a m
+      let bv = handleParam b m
+      let m' = Seq.update c (f av bv) m
+      pure $ ICState i o m' (p + 4)
     update _ _ _ (Param Immediate _) = Left "Unexpected Immediate param in update"
 
     jump t a b = do
-      av <- handleParam a
-      bv <- handleParam b
+      let av = handleParam a m
+      let bv = handleParam b m
       let p' = bool (p + 3) bv $ bool (== 0) (/= 0) t av
-      pure $ ICState h m p'
+      pure $ ICState i o m p'
 
-    handleParam (Param Immediate x) = Right x
-    handleParam (Param Position x)  = lookupE x m
+handleParam :: Param -> Seq Int -> Int
+handleParam (Param Immediate x) _ = x
+handleParam (Param Position x) m = Seq.index m x
