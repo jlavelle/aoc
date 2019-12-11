@@ -1,6 +1,6 @@
 module Main where
 
-import qualified Day7
+import qualified Day11
 
 main :: IO ()
-main = Day7.solutions
+main = Day11.solutions

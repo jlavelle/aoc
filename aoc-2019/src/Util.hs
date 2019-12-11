@@ -19,3 +19,15 @@ chunks n = unfoldr go
 
 count :: (a -> Bool) -> F.Fold a Int
 count p = F.prefilter p $ F.length
+
+unfoldrM :: Monad m => (b -> m (Maybe (a, b))) -> b -> m [a]
+unfoldrM f = go
+  where
+    go b = do
+      m <- f b
+      case m of
+        Nothing      -> pure []
+        Just (a, b') -> (a :) <$> go b'
+
+enumIndex :: (Bounded a, Enum a) => Int -> a
+enumIndex n = let as = enumFromTo minBound maxBound in as !! mod n (length as)
