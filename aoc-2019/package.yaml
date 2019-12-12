@@ -34,6 +34,8 @@ dependencies:
 - foldl
 - profunctors
 - mtl
+- hashable
+- linear
 
 default-extensions:
 - LambdaCase
@@ -42,6 +44,8 @@ default-extensions:
 - FlexibleContexts
 - TupleSections
 - ViewPatterns
+- DeriveGeneric
+- StandaloneDeriving
 
 library:
   source-dirs: src

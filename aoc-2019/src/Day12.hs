@@ -1,52 +1,49 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Day12 where
 
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
 import qualified Data.Text.IO as T
-import Lens.Micro (each, (^..), (&))
-import qualified Data.Set as Set
-import Data.Set (Set)
 import Data.Foldable (foldl')
-import Data.List (unfoldr)
 import Data.Monoid (Sum(..))
-
-type Vec3 = (Int, Int, Int)
+import Linear.V3 (V3(..))
+import Control.Applicative (liftA2)
+import Data.Bool (bool)
+import Data.Either (isLeft)
 
 data Moon = Moon
-  { moonPos :: Vec3
-  , moonVel :: Vec3
+  { moonPos :: V3 Int
+  , moonVel :: V3 Int
   , moonId  :: Int
   } deriving (Show, Eq, Ord)
 
-step :: Set Moon -> Set Moon
-step s = Set.map go s
+step :: (Functor f, Foldable f) => f Moon -> f Moon
+step s = fmap go s
   where
-    go m = applyVelocity $ foldl' gravity m $ Set.delete m s
+    go m = applyVelocity $ foldl' gravity m s
 
-energy :: Set Moon -> Sum Int
+energy :: Foldable f => f Moon -> Sum Int
 energy = foldMap go
   where
-    go m = sumVec (moonPos m) * sumVec (moonVel m)
-    sumVec v = v ^.. each & foldMap (Sum . abs)
+    go m = sabs (moonPos m) * sabs (moonVel m)
+    sabs = foldMap (Sum . abs)
 
-simulate :: Set Moon -> [Set Moon]
-simulate = unfoldr \x -> Just (x, step x)
+simulate :: (Foldable f, Functor f) => f Moon -> [f Moon]
+simulate = iterate step
 
-simulateN :: Int -> Set Moon -> Set Moon
+simulateN :: (Functor f, Foldable f) => Int -> f Moon -> f Moon
 simulateN n s = simulate s !! n
 
 applyVelocity :: Moon -> Moon
-applyVelocity m =
-  let [x, y, z] = zipWith (+) (moonPos m ^.. each) (moonVel m ^.. each)
-  in m { moonPos = (x, y, z) }
+applyVelocity m = m { moonPos = moonPos m + moonVel m }
 
 -- Applies the gravity effects from the 2nd arg to the 1st arg
 gravity :: Moon -> Moon -> Moon
 gravity m m' =
-  let ds = zipWith mkDelta (moonPos m ^.. each) (moonPos m' ^.. each)
-      [vx,vy,vz] = zipWith ($) ds (moonVel m ^.. each)
-  in m { moonVel = (vx, vy, vz) }
+  let ds = liftA2 mkDelta (moonPos m) (moonPos m')
+  in m { moonVel = ds <*> moonVel m }
   where
     mkDelta a b = case compare a b of
       LT -> (+1)
@@ -60,19 +57,35 @@ parseMoon i = toMoon . traverse inner . outer
     outer = T.splitOn "," . T.init . T.tail
     parseInt = fmap fst . T.signed T.decimal
     toMoon = \case
-      Right [x, y, z] -> Right $ Moon (x, y, z) (0, 0, 0) i
+      Right [x, y, z] -> Right $ Moon (V3 x y z) (V3 0 0 0) i
       _ -> Left "No parse"
 
-parseSystem :: Text -> Either String (Set Moon)
-parseSystem = fmap Set.fromList . traverse (uncurry parseMoon) . zip [0..] . T.lines
+parseSystem :: Text -> Either String [Moon]
+parseSystem = traverse (uncurry parseMoon) . zip [0..] . T.lines
 
-parseInput :: IO (Either String (Set Moon))
+parseInput :: IO (Either String [Moon])
 parseInput = parseSystem <$> T.readFile "inputs/day12"
 
-solve1 :: Set Moon -> Sum Int
+solve1 :: [Moon] -> Sum Int
 solve1 = energy . simulateN 1000
+
+solve2 :: [Moon] -> Int
+solve2 s = foldr1 lcm $ fmap (either id id) $ loop (V3 (Right 1) (Right 1) (Right 1)) s
+  where
+    initPos = traverse moonPos s
+    loop n x =
+      let x' = step x
+          eq = liftA2 (==) (traverse moonPos x') initPos
+          n' = bool id (either Left Left) <$> eq <*> fmap (fmap (+1)) n
+      in bool (loop n' x') n' $ all isLeft n'
 
 solutions :: IO ()
 solutions = do
   Right i <- parseInput
   print $ solve1 i
+  print $ solve2 i
+
+test1 :: [Moon]
+test1 =
+  let Right m = parseSystem "<x=-8, y=-10, z=0>\n<x=5, y=5, z=10>\n<x=2, y=-7, z=3>\n<x=9, y=-8, z=-3>"
+  in m
