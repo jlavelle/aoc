@@ -4,7 +4,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Align (alignWith)
 import Data.These (these)
-import Lens.Micro ((&), _1, (%~), (<&>))
+import Lens.Micro ((&), _1, (%~), (<&>), ix, (.~))
 import Util (digits)
 import Data.Bool (bool)
 import qualified Data.Text as T
@@ -45,6 +45,9 @@ data ICState = ICState
   }
 
 newtype Program = Program [Int]
+
+setAddr :: Int -> Int -> Program -> Program
+setAddr a x (Program xs) = Program (xs & ix a .~ x)
 
 parseMode :: Int -> Either String Mode
 parseMode 0 = Right Position
@@ -105,7 +108,7 @@ handleOp op ps (ICState i o m p rb) = case (op, ps) of
   (Add, [a, b, c]) -> update (+) a b c
   (Mul, [a, b, c]) -> update (*) a b c
   (Input, [Param mode x]) -> do
-    let v = head i
+    v <- if null i then Left "Out of input" else Right (head i)
     pos <- case mode of
       Relative -> Right $ x + rb
       Position -> Right x
