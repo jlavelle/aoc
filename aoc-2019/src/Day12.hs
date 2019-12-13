@@ -16,7 +16,6 @@ import Data.Either (isLeft)
 data Moon = Moon
   { moonPos :: V3 Int
   , moonVel :: V3 Int
-  , moonId  :: Int
   } deriving (Show, Eq, Ord)
 
 step :: (Functor f, Foldable f) => f Moon -> f Moon
@@ -50,18 +49,18 @@ gravity m m' =
       GT -> subtract 1
       EQ -> id
 
-parseMoon :: Int -> Text -> Either String Moon
-parseMoon i = toMoon . traverse inner . outer
+parseMoon :: Text -> Either String Moon
+parseMoon = toMoon . traverse inner . outer
   where
     inner = parseInt . snd . T.breakOnEnd "=" . T.strip
     outer = T.splitOn "," . T.init . T.tail
     parseInt = fmap fst . T.signed T.decimal
     toMoon = \case
-      Right [x, y, z] -> Right $ Moon (V3 x y z) (V3 0 0 0) i
+      Right [x, y, z] -> Right $ Moon (V3 x y z) (V3 0 0 0)
       _ -> Left "No parse"
 
 parseSystem :: Text -> Either String [Moon]
-parseSystem = traverse (uncurry parseMoon) . zip [0..] . T.lines
+parseSystem = traverse parseMoon . T.lines
 
 parseInput :: IO (Either String [Moon])
 parseInput = parseSystem <$> T.readFile "inputs/day12"
