@@ -36,6 +36,8 @@ dependencies:
 - mtl
 - hashable
 - linear
+- free
+- lens
 
 default-extensions:
 - LambdaCase
@@ -46,6 +48,12 @@ default-extensions:
 - ViewPatterns
 - DeriveGeneric
 - StandaloneDeriving
+- DeriveFunctor
+- DeriveFoldable
+- DeriveTraversable
+- GeneralizedNewtypeDeriving
+- ConstraintKinds
+- ScopedTypeVariables
 
 library:
   source-dirs: src
