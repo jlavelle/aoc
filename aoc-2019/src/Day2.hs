@@ -1,20 +1,20 @@
 module Day2 where
 
-import qualified Data.IntMap as IntMap
+import qualified Data.Map as Map
 import Lens.Micro ((&), (.~), ix)
-import IntCode (interpret, ICState(..), Program(..), parseProgram)
+import IntCode2 (interpretP, ICState(..), Program(..), parseProgram)
 
-interpretNounVerb :: Program -> Int -> Int -> Maybe Int
-interpretNounVerb (Program xs) n v = p0 $ interpret (Program is) []
+interpretNounVerb :: Program Int -> Int -> Int -> Maybe Int
+interpretNounVerb (Program xs) n v = p0 $ interpretP (Program is) []
   where
     is = xs & ix 1 .~ n
             & ix 2 .~ v
-    p0 = either (const Nothing) id . fmap (IntMap.lookup 0 . memory)
+    p0 = either (const Nothing) id . fmap (Map.lookup 0 . _memory . snd)
 
-solve1 :: Program -> Maybe Int
+solve1 :: Program Int -> Maybe Int
 solve1 xs = interpretNounVerb xs 12 2
 
-solve2 :: Program -> Maybe Int
+solve2 :: Program Int -> Maybe Int
 solve2 xs = foldr go Nothing [(x, y) | x <- [0..99], y <- [0..99]]
   where
     go (n, v) acc
