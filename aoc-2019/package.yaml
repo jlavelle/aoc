@@ -38,6 +38,8 @@ dependencies:
 - linear
 - free
 - lens
+- megaparsec
+- monoidal-containers
 
 default-extensions:
 - LambdaCase
