@@ -156,21 +156,16 @@ solve2 fs = runChemM (mkDatabase fs) go
       oest <- creq est
       loop oest est est
 
-    loop o f delta
-      | o == target = pure f
-      | o > target = do
-          let nd = div delta 2
-              nf = f - nd
-          no <- creq nf
-          loop no nf nd
-      | o < target = do
-          p1 <- creq $ f + 1
-          if p1 >= target
-            then pure f
-            else do
-              let nf = f + delta
-              no <- creq nf
-              loop no nf delta
+    loop o f d | o > target =
+                   let nd = div d 2
+                       nf = f - nd
+                   in  creq nf >>= \no -> loop no nf nd
+               | o < target =
+                   (>= target) <$> creq (f + 1) >>= \case
+                     True -> pure f
+                     _    -> let nf = f + d
+                             in creq nf >>= \no -> loop no nf d
+               | otherwise = pure f
 
     creq n = (oreRequired <$> prodTree (fuel & amount .~ n)) <* modify (const mempty)
     target = 1000000000000
