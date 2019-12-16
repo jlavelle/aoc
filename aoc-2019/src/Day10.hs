@@ -4,7 +4,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Functor ((<&>), ($>))
 import Lens.Micro ((^?), ix)
 import Data.Bifunctor (bimap)
 import qualified Data.Text as T
@@ -36,9 +35,9 @@ rayThrough p1@(x1, y1) (x2, y2) =
 visibilities :: Set (Point Int) -> Map (Point Int) (Map (Ray Double) [Point Int])
 visibilities field = foldr go mempty field
   where
-    go a m = Map.insert a (foldr lines mempty $ Set.delete a field) m
+    go a m = Map.insert a (foldr lns mempty $ Set.delete a field) m
       where
-        lines b = Map.insertWith (<>) (rayThrough (convert a) (convert b)) [b]
+        lns b = Map.insertWith (<>) (rayThrough (convert a) (convert b)) [b]
 
 toField :: [[Bool]] -> Set (Point Int)
 toField = foldMap go . zip [0..]

@@ -4,19 +4,16 @@ module Day11 where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
-import IntCode (interpret, ICState(..), parseProgram, parseProgram', Program)
-import Control.Monad.Except (MonadError, liftEither, throwError, runExcept)
-import Control.Monad.State.Lazy (MonadState, get, modify, execStateT)
-import Control.Monad.Fix (MonadFix)
-import Data.Functor ((<&>))
+import IntCode2 (parseProgram, initICState, compile, IntCode(..))
 import Util (enumIndex)
-import Data.List (unfoldr)
-import Debug.Trace (traceShow)
-import Data.Either (fromRight)
 import Data.Text (Text)
 import qualified Data.Text.IO as T
-import Data.Semigroup (Arg(..))
-import Data.Bifunctor (bimap)
+import Linear.V2 (V2(..), _x, _y)
+import Control.Lens ((+~), (-~), (^.), (&))
+import qualified Control.Foldl as F
+import Data.Ord (comparing)
+import Data.Bool (bool)
+import Data.Maybe (fromJust)
 
 data Direction = N | E | S | W deriving (Show, Eq, Enum, Bounded)
 
@@ -24,12 +21,9 @@ data Turn = L | R
 
 data Robot = Robot 
   { robotDirection :: Direction 
-  , robotPosition  :: (Int, Int) 
-  , robotShipMap   :: Map (Int, Int) Int
+  , robotPosition  :: V2 Int
+  , robotShipMap   :: Map (V2 Int) Int
   } deriving Show
-
-interpretOut :: Program -> [Int] -> [Int]
-interpretOut p i = fromRight (error "interpretOut") (interpret p i <&> reverse . output)
 
 paint :: Int -> Robot -> Robot
 paint n (Robot h p m) | n == 0 || n == 1 = Robot h p (Map.insert p n m)
@@ -38,60 +32,59 @@ paint n (Robot h p m) | n == 0 || n == 1 = Robot h p (Map.insert p n m)
 turn :: Int -> Robot -> Robot
 turn n (Robot h p m) = Robot (applyTurn (parseTurn n) h) p m
   where
-    applyTurn L h = enumIndex $ fromEnum h - 1
-    applyTurn R h = enumIndex $ fromEnum h + 1
+    applyTurn L a = enumIndex $ fromEnum a - 1
+    applyTurn R a = enumIndex $ fromEnum a + 1
 
     parseTurn 0 = L
     parseTurn 1 = R
-    parseTurn n = error $ "Unknown turn direction " <> show n
+    parseTurn x = error $ "Unknown turn direction " <> show x
 
 advance :: Robot -> Robot
 advance (Robot h p m) = Robot h (go h p) m
   where
-    go d (x, y) = case d of
-      N -> (x, y + 1)
-      E -> (x + 1, y)
-      S -> (x, y - 1)
-      W -> (x - 1, y)
+    go d = case d of
+      N -> _y +~ 1
+      E -> _x +~ 1
+      S -> _y -~ 1
+      W -> _x -~ 1
 
 currentColor :: Robot -> Int
 currentColor (Robot _ p m) = Map.findWithDefault 0 p m
 
-paintShip :: Int -> Program -> Robot
-paintShip s p =
-  let r = interpretOut p (s : fmap fst n)
-      n = unfoldr go (r, Robot N (0, 0) mempty)
-  in snd $ last n
+paintShip :: Int -> [Int] -> Robot
+paintShip s p = go (Robot N (V2 0 0) mempty) (Just s) $ compile $ initICState p
   where
-    go ([], _) = Nothing
-    go ([a], _) = error "Unexpected output"
-    go ((a:b:rs), r) = 
-      let r' = update r 
-      in Just ((currentColor r', r'), (rs, r'))
-      where
-        update = advance . turn b . paint a
+    go r i x = case x of
+      Error e -> error $ show e
+      Halted  -> r
+      Input f | Just i' <- i -> go r Nothing $ f i'
+              | otherwise    -> error "Out of input"
+      Output c (Output t next) ->
+        let r' = advance . turn t . paint c $ r
+        in go r' (Just $ currentColor r') next
+      _ -> error "Unexpected step"
 
-solve1 :: Program -> Int
+solve1 :: [Int] -> Int
 solve1 = length . robotShipMap . paintShip 0
 
-solve2 :: Program -> Text
+solve2 :: [Int] -> Text
 solve2 = render . robotShipMap . paintShip 1
 
-render :: Map (Int, Int) Int -> Text
-render m =
-  let aks f = Map.mapKeys (uncurry Arg . f)
-      (minx, maxx) = fstA (Map.findMin $ aks id m, Map.findMax $ aks id m)
-      (miny, maxy) = fstA (Map.findMin $ aks swap m, Map.findMax $ aks swap m)
-  in foldMap (\ps -> foldMap go ps <> "\n") [[(x, y) | x <- [minx..maxx]] | y <- reverse [miny..maxy]]
+render :: Map (V2 Int) Int -> Text
+render m = foldMap (\ps -> foldMap go ps <> "\n") [[V2 x y | x <- xr] | y <- yr]
   where
-    go p = case Map.findWithDefault 0 p m of
-      1 -> "x"
-      _ -> " "
-    fstA = bimap unA unA where unA ((Arg a _), _) = a
-    swap (a, b) = (b, a)
+    go p = Map.findWithDefault " " p $ fmap (bool " " "x" . (== 1)) m
+    xr = [minx..maxx]
+    yr = reverse [miny..maxy]
+    (minx, maxx, miny, maxy) = Map.keys m & F.fold mms
+      where
+        mms = (,,,) <$> minV _x <*> maxV _x <*> minV _y <*> maxV _y
+        minV = comp F.minimumBy
+        maxV = comp F.maximumBy
+        comp f l = fmap ((^. l) . fromJust) $ f $ comparing (^. l)
 
 solutions :: IO ()
 solutions = do
-  Right i <- parseProgram "inputs/day11"
+  i <- parseProgram "inputs/day11"
   print $ solve1 i
   T.putStrLn $ solve2 i

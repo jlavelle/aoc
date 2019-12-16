@@ -1,7 +1,6 @@
 module Day13 where
 
-import IntCode (parseProgram', parseProgram, ICState(..), interpret, Program, setAddr)
-import Data.Functor ((<&>))
+import IntCode2 (interpretOut, parseProgram)
 import Util (chunks)
 import Linear.V2 (V2(..))
 
@@ -28,13 +27,13 @@ parseCell [a, b, c] = case (a, b) of
   _       -> Right $ TileCell (toEnum c) (V2 a b)
 parseCell _ = Left "Unexpected number of arguments"
 
-run :: [Int] -> Program -> Either String [Cell]
-run i p = interpret p i >>= traverse parseCell . chunks 3 . reverse . output
+run :: [Int] -> [Int] -> Either String [Cell]
+run i p = traverse parseCell . chunks 3 $ interpretOut p i
 
-solve1 :: Program -> Either String Int
+solve1 :: [Int] -> Either String Int
 solve1 = fmap (length . filter ((== Just Block) . cellTile)) . run []
 
 solutions :: IO ()
 solutions = do
-  Right i <- parseProgram "inputs/day13"
+  i <- parseProgram "inputs/day13"
   print $ solve1 i
