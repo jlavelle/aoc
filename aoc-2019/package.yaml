@@ -56,6 +56,8 @@ default-extensions:
 - GeneralizedNewtypeDeriving
 - ConstraintKinds
 - ScopedTypeVariables
+- KindSignatures
+- TypeFamilies
 
 library:
   source-dirs: src
