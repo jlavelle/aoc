@@ -16,7 +16,6 @@ import Text.Megaparsec (some, manyTill, Parsec, empty, optional, eof, parse)
 import Data.Void (Void)
 import Control.Lens.TH (makeLenses)
 import Control.Lens ((^.), (*~), each, (&), (<&>), (.~))
-import Data.Bool (bool)
 import Data.Tree (Tree)
 import qualified Data.Tree as Tree
 
@@ -70,20 +69,20 @@ order c = do
     0 -> pure []
     _ -> do
       let prod = f ^. output ^. amount
-          mult = let m = runMult req prod in bool m 1 $ m == 0
-          ins  = f ^. inputs & each . amount *~ mult
+          mult = runMult req prod
       addToCache (c ^. name) $ prod * mult - req
-      pure ins
+      pure $ f ^. inputs & each . amount *~ mult
 
 runMult :: Int -> Int -> Int
-runMult req prod = ceiling (fromIntegral req / fromIntegral prod :: Double)
+runMult req prod =
+  case ceiling (fromIntegral req / fromIntegral prod :: Double) of
+    0 -> 1
+    n -> n
 
 useCache :: Chem m => Chemical -> m Int
 useCache c = do
   cached <- get <&> Map.findWithDefault 0 (c ^. name)
-  let t = c ^. amount - cached
-      r | t >= 0    = cached
-        | otherwise = c ^. amount
+  let r = min (c ^. amount) cached
   modify $ Map.adjust (subtract r) (c ^. name)
   pure r
 

@@ -117,7 +117,7 @@ step s = case parseCurrentOp s of
       JumpF a b  -> Continue $ jump (opLength op) False a b
       OpLT a b c -> Continue $ binOp (\x y -> bool 0 1 $ x < y) a b c
       OpEQ a b c -> Continue $ binOp (\x y -> bool 0 1 $ x == y) a b c
-      Offs a     -> Continue (s & relative +~ readParam a)
+      Offs a     -> Continue $ s & relative +~ readParam a
       Halt       -> HaltedF
     binOp f a b c = writeParam c $ f (readParam a) (readParam b)
     jump l p a b =
