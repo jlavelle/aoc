@@ -111,10 +111,11 @@ stepRobot r d = case (r ^. brain) of
         advance = r & node .~ node'
                     & brain .~ next 
                     & path %~ (d:)
-        insertNode = roomMap %= AM.overlay (AM.edges [es, swap es])
+        insertNode = roomMap %= AM.overlay es
         node' = r ^. node & position %~ move d
                           & tile     .~ t
-        es = (r ^. node, node')
+        es | t == Wall = AM.vertex node'
+           | otherwise = let e = (r ^. node, node') in AM.edges [e, swap e]
 
 adjacent :: V2 Int -> [(Direction, V2 Int)]
 adjacent p = zipWith (\a b -> (a, move a b)) ds $ replicate (length ds) p
