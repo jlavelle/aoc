@@ -2,6 +2,14 @@ module Util where
 
 import Data.List (unfoldr)
 import qualified Control.Foldl as F
+import qualified Data.Map as Map
+import Data.Map (Map)
+import qualified Data.Text as T
+import Data.Text (Text)
+import Linear.V2 (V2(..), _x, _y)
+import Data.Ord (comparing)
+import Control.Lens ((^.), (&))
+import Data.Maybe (fromJust)
 
 digits :: Integral a => a -> [a]
 digits = loop []
@@ -31,3 +39,16 @@ unfoldrM f = go
 
 enumIndex :: (Bounded a, Enum a) => Int -> a
 enumIndex n = let as = enumFromTo minBound maxBound in as !! mod n (length as)
+
+renderMap :: (a -> Text) -> Text -> Map (V2 Int) a -> Text
+renderMap f e m = foldMap (\ps -> foldMap go ps <> "\n") [[V2 x y | x <- xr] | y <- yr]
+  where
+    go p = Map.findWithDefault e p $ fmap f m
+    xr = [minx..maxx]
+    yr = reverse [miny..maxy]
+    (minx, maxx, miny, maxy) = Map.keys m & F.fold mms
+      where
+        mms = (,,,) <$> minV _x <*> maxV _x <*> minV _y <*> maxV _y
+        minV = comp F.minimumBy
+        maxV = comp F.maximumBy
+        comp f l = fmap ((^. l) . fromJust) $ f $ comparing (^. l)
