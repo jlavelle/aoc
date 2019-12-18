@@ -9,9 +9,10 @@ import Data.Map (Map)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
+import qualified Data.Text as T
 import Linear.V2 (V2(..), _x, _y)
 import Data.Ord (comparing)
-import Control.Lens ((^.), (&), use, (.=), (%=))
+import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap)
 import Control.Lens.TH (makeLenses)
 import Data.Maybe (fromJust)
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
@@ -21,6 +22,7 @@ import Control.Monad (unless, when)
 import Data.Foldable (fold)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
+import Data.Monoid (Sum(..))
 
 digits :: Integral a => a -> [a]
 digits = loop []
@@ -29,6 +31,9 @@ digits = loop []
     loop acc n =
       let (q, r) = quotRem n 10
       in loop (r : acc) q
+
+fromDigits :: Integral a => [a] -> a
+fromDigits = getSum . ifoldMap (\i x -> Sum $ x * 10 ^ i) . reverse
 
 chunks :: Int -> [a] -> [[a]]
 chunks n = unfoldr go
@@ -92,3 +97,6 @@ bfsFrom a g = execState loop (BfsState (Set.singleton a) [pure a] []) ^. paths
 
 adjacent :: Ord a => a -> AdjacencyMap a -> Set a
 adjacent a = fold . Map.lookup a . AM.adjacencyMap
+
+unpackWith :: (Char -> a) -> Text -> [a]
+unpackWith f = T.foldr ((:) . f) []

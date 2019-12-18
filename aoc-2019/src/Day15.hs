@@ -108,9 +108,9 @@ stepRobot r d = case (r ^. brain) of
           Wall -> pure $ r & brain .~ next
           Goal -> (goalPath <>= First (Just (d : r ^. path))) $> advance
           _    -> pure advance
-        advance = r & node .~ node'
+        advance = r & node  .~ node'
                     & brain .~ next 
-                    & path %~ (d:)
+                    & path  %~ (d:)
         insertNode = roomMap %= AM.overlay es
         node' = r ^. node & position %~ move d
                           & tile     .~ t
