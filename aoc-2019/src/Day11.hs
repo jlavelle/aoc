@@ -14,6 +14,7 @@ import qualified Control.Foldl as F
 import Data.Ord (comparing)
 import Data.Bool (bool)
 import Data.Maybe (fromJust)
+import Util (renderMap)
 
 data Direction = N | E | S | W deriving (Show, Eq, Enum, Bounded)
 
@@ -68,20 +69,7 @@ solve1 :: [Int] -> Int
 solve1 = length . robotShipMap . paintShip 0
 
 solve2 :: [Int] -> Text
-solve2 = render . robotShipMap . paintShip 1
-
-render :: Map (V2 Int) Int -> Text
-render m = foldMap (\ps -> foldMap go ps <> "\n") [[V2 x y | x <- xr] | y <- yr]
-  where
-    go p = Map.findWithDefault " " p $ fmap (bool " " "x" . (== 1)) m
-    xr = [minx..maxx]
-    yr = reverse [miny..maxy]
-    (minx, maxx, miny, maxy) = Map.keys m & F.fold mms
-      where
-        mms = (,,,) <$> minV _x <*> maxV _x <*> minV _y <*> maxV _y
-        minV = comp F.minimumBy
-        maxV = comp F.maximumBy
-        comp f l = fmap ((^. l) . fromJust) $ f $ comparing (^. l)
+solve2 = renderMap (bool " " "x" . (== 1)) " " . robotShipMap . paintShip 1
 
 solutions :: IO ()
 solutions = do
