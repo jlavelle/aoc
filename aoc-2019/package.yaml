@@ -54,6 +54,7 @@ default-extensions:
 - DeriveFunctor
 - DeriveFoldable
 - DeriveTraversable
+- DerivingStrategies
 - GeneralizedNewtypeDeriving
 - ConstraintKinds
 - ScopedTypeVariables

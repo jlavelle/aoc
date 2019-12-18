@@ -182,6 +182,6 @@ parseProgram :: Integral a => FilePath -> IO [a]
 parseProgram = fmap parseProgram' . T.readFile
 
 parseProgram' :: Integral a => T.Text -> [a]
-parseProgram' = either error id . traverse parseInt . T.splitOn ","
+parseProgram' = either error id . traverse parseInt . T.splitOn "," . T.strip
   where
     parseInt = fmap fst . T.signed T.decimal
