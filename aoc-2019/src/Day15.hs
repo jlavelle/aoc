@@ -9,7 +9,7 @@ import Control.Monad.State (MonadState, evalState, execState)
 import Linear.V2 (V2(..), _x, _y)
 import Control.Lens ((^.), (.~), (%~), (&), (+~), (-~), use, (.=), (%=), (<&>), (<>=))
 import Control.Lens.TH (makeLenses)
-import IntCode2 (compile, initICState, IntCode(..), parseProgram)
+import IntCode (compile, initICState, IntCode(..), parseProgram)
 import Data.Foldable (fold)
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
 import qualified Algebra.Graph.AdjacencyMap as AM

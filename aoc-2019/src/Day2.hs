@@ -1,7 +1,7 @@
 module Day2 where
 
 import Control.Lens ((^.), (^?), (&), (.~), ix, _1)
-import IntCode2 (interpretSt, memory, parseProgram)
+import IntCode (interpretSt, memory, parseProgram)
 
 interpretNounVerb :: [Int] -> Int -> Int -> Maybe Int
 interpretNounVerb xs n v = interpretSt is [] ^. _1 . memory ^? ix 0

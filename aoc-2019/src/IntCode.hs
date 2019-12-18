@@ -1,10 +1,14 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module IntCode where
 
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.Align (alignWith)
-import Data.These (these)
-import Lens.Micro ((&), _1, (%~), (<&>), ix, (.~))
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Control.Lens.TH (makeLenses)
+import Control.Lens (ix, (^?), (^.), (+~), (&), (%~), (.~), (<&>))
+import Control.Monad.Except (runExcept, throwError)
+import Control.Monad.State.Strict (evalStateT, get, modify)
+import Data.Maybe (fromMaybe)
 import Util (digits)
 import Data.Bool (bool)
 import qualified Data.Text as T
@@ -15,135 +19,169 @@ data Mode
   = Immediate
   | Position
   | Relative
-  deriving Show
+  deriving (Show, Eq, Ord)
 
-data Param = Param Mode Int
-  deriving Show
+data Param a = Param !Mode !a
+  deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
 
-data OpCode
-  = Add
-  | Mul
-  | Input
-  | Output
+data Op a
+  = Add   !a !a !a
+  | Mul   !a !a !a
+  | Inp   !a
+  | Out   !a
+  | JumpT !a !a
+  | JumpF !a !a
+  | OpLT  !a !a !a
+  | OpEQ  !a !a !a
+  | Offs  !a
   | Halt
-  | JumpIfTrue
-  | JumpIfFalse
-  | LessThan
-  | Equals
-  | OffsetRB
+  deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+
+data ICState a = ICState
+  { _memory   :: !(Map a a)
+  , _pointer  :: !a
+  , _relative :: !a
+  } deriving Show
+
+makeLenses ''ICState
+
+data Error a
+  = UnknownOpCode a
+  | UnknownParamMode a
+  | SegFault a
+  | OutOfInput
   deriving Show
 
-data Op = Op OpCode [Mode]
-  deriving Show
+data IntCode a
+  = Input (a -> IntCode a)
+  | Output a (IntCode a)
+  | Halted
+  | Error (Error a)
 
-data ICState = ICState
-  { input    :: [Int]
-  , output   :: [Int]
-  , memory   :: IntMap Int
-  , pointer  :: Int
-  , relative :: Int
-  }
+data IntCodeF a r
+  = Continue r
+  | InputF (a -> r)
+  | OutputF a r
+  | HaltedF
+  | ErrorF (Error a)
+  deriving Functor
 
-newtype Program = Program [Int]
+interpretOut :: (Show a, Enum a, Ord a, Integral a) => [a] -> [a] -> [a]
+interpretOut p i' = go i' $ compile $ initICState p
+  where
+    go i x = case x of
+      Error e -> error $ show e
+      Halted  -> []
+      Input f | a:as <- i -> go as $ f a
+              | otherwise -> error "Out of input"
+      Output a r -> a : go i r
 
-setAddr :: Int -> Int -> Program -> Program
-setAddr a x (Program xs) = Program (xs & ix a .~ x)
+interpretSt :: (Show a, Enum a, Ord a, Integral a) => [a] -> [a] -> (ICState a, [a])
+interpretSt p i' = fmap reverse $ go i' [] $ initICState p
+  where
+    go i o s = case step s of
+      InputF f | a:as <- i -> go as o $ f a
+               | otherwise -> error "Out of input"
+      Continue s'  -> go i o s'
+      OutputF a s' -> go i (a:o) s'
+      HaltedF      -> (s, o)
+      ErrorF e     -> error $ show e
 
-parseMode :: Int -> Either String Mode
-parseMode 0 = Right Position
-parseMode 1 = Right Immediate
-parseMode 2 = Right Relative
-parseMode n = Left $ "Unknown mode " <> show n
+initICState :: (Enum a, Ord a, Num a) => [a] -> ICState a
+initICState xs = ICState (Map.fromAscList $ zip [0..] xs) 0 0
 
-parseOp :: Int -> Either String Op
-parseOp i =
-  let ds = digits i
-      (ems, oc) = splitAt (length ds - 2) ds & _1 %~ traverse parseMode . reverse
-      modes n = ems <&> \ms -> alignWith (these id id const) ms (replicate n Position)
-  in case (dropWhile (== 0) oc) of
-    [1] -> Op Add <$> modes 3
-    [2] -> Op Mul <$> modes 3
-    [3] -> Op Input <$> modes 1
-    [4] -> Op Output <$> modes 1
-    [5] -> Op JumpIfTrue <$> modes 2
-    [6] -> Op JumpIfFalse <$> modes 2
-    [7] -> Op LessThan <$> modes 3
-    [8] -> Op Equals <$> modes 3
-    [9] -> Op OffsetRB <$> modes 1
-    [9,9] -> Right $ Op Halt []
-    _ -> Left $ "Unknown op code " <> show ds
+compile :: (Ord a, Integral a) => ICState a -> IntCode a
+compile = compile' step
 
-parseProgram :: FilePath -> IO (Either String Program)
+compile' :: (ICState a -> IntCodeF a (ICState a)) -> ICState a -> IntCode a
+compile' f = loop
+  where
+    loop s = case f s of
+      Continue s'  -> loop s'
+      InputF g     -> Input (loop . g)
+      OutputF a s' -> Output a $ loop s'
+      HaltedF      -> Halted
+      ErrorF e     -> Error e
+
+step :: (Ord a, Integral a) => ICState a -> IntCodeF a (ICState a)
+step s = case parseCurrentOp s of
+  Left e   -> ErrorF e
+  Right op -> handleOp op <&> advancePtr op
+  where
+    handleOp op = case op of
+      Add a b c  -> Continue $ binOp (+) a b c
+      Mul a b c  -> Continue $ binOp (*) a b c
+      Inp a      -> InputF $ writeParam a
+      Out a      -> OutputF (readParam a) s
+      JumpT a b  -> Continue $ jump (opLength op) True a b
+      JumpF a b  -> Continue $ jump (opLength op) False a b
+      OpLT a b c -> Continue $ binOp (\x y -> bool 0 1 $ x < y) a b c
+      OpEQ a b c -> Continue $ binOp (\x y -> bool 0 1 $ x == y) a b c
+      Offs a     -> Continue $ s & relative +~ readParam a
+      Halt       -> HaltedF
+    binOp f a b c = writeParam c $ f (readParam a) (readParam b)
+    jump l p a b =
+      let r = bool (== 0) (/= 0) p (readParam a)
+      in bool (s & pointer +~ l) (s & pointer .~ readParam b) r
+    readParam (Param m a) = case m of
+      Relative  -> deref' (s ^. relative + a) s
+      Position  -> deref' a s
+      Immediate -> a
+    writeParam (Param m a) x = case m of
+      Relative  -> s & memory %~ Map.insert (s ^. relative + a) x
+      Position  -> s & memory %~ Map.insert a x
+      Immediate -> error "Immediate mode write"
+    advancePtr op | isJump op = id
+                  | otherwise = pointer +~ opLength op
+
+deref :: Ord a => a -> ICState a -> Either (Error a) a
+deref k s = maybe (Left $ SegFault k) pure $ Map.lookup k (s ^. memory)
+
+deref' :: (Num a, Ord a) => a -> ICState a -> a
+deref' k s = Map.findWithDefault 0 k (s ^. memory)
+
+parseCurrentOp :: forall a. (Integral a, Ord a) => ICState a -> Either (Error a) (Op (Param a))
+parseCurrentOp s = go =<< deref (s ^. pointer) s
+  where
+    go :: a -> Either (Error a) (Op (Param a))
+    go (flip quotRem 100 -> (reverse . digits -> pcs, oc)) = pparse case oc of
+      1  -> Add   <$> param <*> param <*> param
+      2  -> Mul   <$> param <*> param <*> param
+      3  -> Inp   <$> param
+      4  -> Out   <$> param
+      5  -> JumpT <$> param <*> param
+      6  -> JumpF <$> param <*> param
+      7  -> OpLT  <$> param <*> param <*> param
+      8  -> OpEQ  <$> param <*> param <*> param
+      9  -> Offs  <$> param
+      99 -> pure Halt
+      _  -> throwError $ UnknownOpCode oc
+      where
+        pparse = runExcept . flip evalStateT 1
+        param = do
+          n <- get <* modify succ
+          m <- parseParamMode n
+          pure $ Param m $ deref' ((s ^. pointer) + n) s
+        parseParamMode n = f $ fromMaybe 0 $ pcs ^? ix (fromIntegral n - 1)
+          where
+            f = \case
+              0 -> pure Position
+              1 -> pure Immediate
+              2 -> pure Relative
+              e -> throwError $ UnknownParamMode e
+
+isJump :: Op a -> Bool
+isJump (JumpT _ _) = True
+isJump (JumpF _ _) = True
+isJump _ = False
+
+opLength :: Integral b => Op a -> b
+opLength = (+ 1) . fromIntegral . length
+
+parseProgram :: Integral a => FilePath -> IO [a]
 parseProgram = fmap parseProgram' . T.readFile
 
-parseProgram' :: T.Text -> Either String Program
-parseProgram' = fmap Program . traverse parseInt . T.splitOn ","
+parseProgram' :: Integral a => T.Text -> [a]
+parseProgram' = either error id . traverse parseInt . T.splitOn ","
   where
     parseInt = fmap fst . T.signed T.decimal
-
-movePointer :: (Int -> Int) -> ICState -> ICState
-movePointer f ics = ics { pointer = f $ pointer ics }
-
-initICState :: ICState
-initICState = ICState [] [] mempty 0 0
-
-interpret :: Program -> [Int] -> Either String ICState
-interpret (Program is) h =
-  let mem = IntMap.fromAscList $ zip [0..] is
-  in step $ initICState { memory = mem, input = h }
-
-step :: ICState -> Either String ICState
-step s@(ICState _ _ m p _) = do
-  Op c ms <- parseOp =<< lookupE p m
-  let pvs = flip (IntMap.findWithDefault 0) m <$> [p + 1..p + length ms]
-  let params = zipWith Param ms pvs
-  case c of
-    Halt -> pure s
-    _    -> do
-      s' <- handleOp c params s
-      step s'
-
-handleOp :: OpCode -> [Param] -> ICState -> Either String ICState
-handleOp op ps (ICState i o m p rb) = case (op, ps) of
-  (Add, [a, b, c]) -> update (+) a b c
-  (Mul, [a, b, c]) -> update (*) a b c
-  (Input, [Param mode x]) -> do
-    v <- if null i then Left "Out of input" else Right (head i)
-    pos <- case mode of
-      Relative -> Right $ x + rb
-      Position -> Right x
-      _        -> Left "Invalid input mode"
-    let m' = IntMap.insert pos v m
-    pure $ ICState (tail i) o m' (p + 2) rb
-  (Output, [a]) -> let v = handleParam a rb m in Right $ ICState i (v:o) m (p + 2) rb
-  (JumpIfTrue, [a, b]) -> jump True a b
-  (JumpIfFalse, [a, b]) -> jump False a b
-  (LessThan, [a, b, c]) -> update (\x y -> bool 0 1 $ x < y) a b c
-  (Equals, [a, b, c]) -> update (\x y -> bool 0 1 $ x == y) a b c
-  (OffsetRB, [a]) -> pure $ ICState i o m (p + 2) (rb + handleParam a rb m)
-  (Halt, _) -> Left "Halted"
-  (x, xs) -> Left $ "Invalid params for op " <> show x <>": " <> show xs
-  where
-    update f a b (Param mode c) = do
-      let av = handleParam a rb m
-      let bv = handleParam b rb m
-      c' <- case mode of
-        Relative -> Right $ c + rb
-        Position -> Right c
-        _        -> Left "Invalid update mode"
-      let m' = IntMap.insert c' (f av bv) m
-      pure $ ICState i o m' (p + 4) rb
-
-    jump t a b = do
-      let av = handleParam a rb m
-      let bv = handleParam b rb m
-      let p' = bool (p + 3) bv $ bool (== 0) (/= 0) t av
-      pure $ ICState i o m p' rb
-
-handleParam :: Param -> Int -> IntMap Int -> Int
-handleParam (Param Immediate x) _ _ = x
-handleParam (Param Position x) _ m = IntMap.findWithDefault 0 x m
-handleParam (Param Relative x) rb m = IntMap.findWithDefault 0 (rb + x) m
-
-lookupE :: Int -> IntMap a -> Either String a
-lookupE x m = maybe (Left $ "Key " <> show x <> " not found") Right $ IntMap.lookup x m

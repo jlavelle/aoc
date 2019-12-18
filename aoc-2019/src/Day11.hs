@@ -4,7 +4,7 @@ module Day11 where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
-import IntCode2 (parseProgram, initICState, compile, IntCode(..))
+import IntCode (parseProgram, initICState, compile, IntCode(..))
 import Util (enumIndex)
 import Data.Text (Text)
 import qualified Data.Text.IO as T

@@ -6,7 +6,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Lens ((^.), (&), (.~), (%~), ix)
 import Control.Lens.TH (makeLenses)
-import IntCode2 (interpretOut, parseProgram, IntCode(..), compile, initICState)
+import IntCode (interpretOut, parseProgram, IntCode(..), compile, initICState)
 import Util (chunks)
 import Linear.V2 (V2(..), _x)
 

@@ -1,6 +1,6 @@
 module Day9 where
 
-import IntCode2 (parseProgram, interpretOut)
+import IntCode (parseProgram, interpretOut)
 
 solve :: Int -> [Int] -> Either String Int
 solve i p = case interpretOut p [i] of

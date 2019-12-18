@@ -1,6 +1,6 @@
 module Day5 where
 
-import IntCode2 (interpretOut, parseProgram)
+import IntCode (interpretOut, parseProgram)
 
 solve1 :: [Int] -> [Int]
 solve1 = flip interpretOut [1]

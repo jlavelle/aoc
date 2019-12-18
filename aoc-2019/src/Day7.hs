@@ -1,6 +1,6 @@
 module Day7 where
 
-import IntCode2 (interpretOut, parseProgram', parseProgram)
+import IntCode (interpretOut, parseProgram', parseProgram)
 import Data.Monoid (Endo(..))
 import Data.List (permutations)
 import Data.Profunctor (lmap)
