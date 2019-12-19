@@ -12,7 +12,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Linear.V2 (V2(..), _x, _y)
 import Data.Ord (comparing)
-import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap)
+import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap, Getter)
 import Control.Lens.TH (makeLenses)
 import Data.Maybe (fromJust)
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
@@ -20,7 +20,8 @@ import qualified Algebra.Graph.AdjacencyMap as AM
 import Control.Monad.State (State, execState)
 import Control.Monad (unless, when)
 import Data.Foldable (fold)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
+import Control.Comonad (extend)
 import qualified Data.List.NonEmpty as NE
 import Data.Monoid (Sum(..))
 
@@ -61,7 +62,7 @@ renderMap f e m = foldMap (\ps -> foldMap go ps <> "\n") [[V2 x y | x <- xr] | y
   where
     go p = Map.findWithDefault e p $ fmap f m
     xr = [minx..maxx]
-    yr = reverse [miny..maxy]
+    yr = [miny..maxy]
     (minx, maxx, miny, maxy) = Map.keys m & F.fold mms
       where
         mms = (,,,) <$> minV _x <*> maxV _x <*> minV _y <*> maxV _y
@@ -100,3 +101,13 @@ adjacent a = fold . Map.lookup a . AM.adjacencyMap
 
 unpackWith :: (Char -> a) -> Text -> [a]
 unpackWith f = T.foldr ((:) . f) []
+
+eqOn :: Eq b => Getter a b -> a -> a -> Bool
+eqOn l x y = x ^. l == y ^. l
+
+intersperseMap :: (a -> a -> b) -> (a -> b) -> [a] -> [b]
+intersperseMap _ _ [] = []
+intersperseMap f g as = fold $ NE.toList $ extend go $ NE.fromList as
+  where
+    go (a :| [])    = [g a]
+    go (a :| (b:_)) = [g a, f a b]

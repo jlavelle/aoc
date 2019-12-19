@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module IntCode where
 
@@ -7,7 +8,7 @@ import qualified Data.Map as Map
 import Control.Lens.TH (makeLenses)
 import Control.Lens (ix, (^?), (^.), (+~), (&), (%~), (.~), (<&>))
 import Control.Monad.Except (runExcept, throwError)
-import Control.Monad.State.Strict (evalStateT, get, modify)
+import Control.Monad.State.Strict (evalStateT, get, modify, MonadState)
 import Data.Maybe (fromMaybe)
 import Util (digits)
 import Data.Bool (bool)
@@ -86,6 +87,24 @@ interpretSt p i' = fmap reverse $ go i' [] $ initICState p
       OutputF a s' -> go i (a:o) s'
       HaltedF      -> (s, o)
       ErrorF e     -> error $ show e
+
+data Interpret m a = Interpret
+  { continue :: ICState a -> m ()
+  , input    :: m a
+  , output   :: a -> m ()
+  , halted   :: m ()
+  , err      :: Error a -> m ()
+  }
+
+interpretM :: (Enum a, Ord a, Integral a, MonadState s m) => Interpret m a -> [a] -> m ()
+interpretM Interpret{..} = loop . initICState
+  where
+    loop s = case step s of
+      Continue s'  -> continue s' *> loop s'
+      InputF g     -> input >>= loop . g
+      OutputF a s' -> output a *> loop s'
+      HaltedF      -> halted
+      ErrorF e     -> err e
 
 initICState :: (Enum a, Ord a, Num a) => [a] -> ICState a
 initICState xs = ICState (Map.fromAscList $ zip [0..] xs) 0 0
