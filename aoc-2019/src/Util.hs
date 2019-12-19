@@ -12,11 +12,13 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Linear.V2 (V2(..), _x, _y)
 import Data.Ord (comparing)
-import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap, Getter)
+import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap, Getter, ifoldr, (+~), (-~), (<&>), FoldableWithIndex)
 import Control.Lens.TH (makeLenses)
 import Data.Maybe (fromJust)
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
 import qualified Algebra.Graph.AdjacencyMap as AM
+import Algebra.Graph.Class (Graph)
+import qualified Algebra.Graph.Class as G
 import Control.Monad.State (State, execState)
 import Control.Monad (unless, when)
 import Data.Foldable (fold)
@@ -24,6 +26,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Control.Comonad (extend)
 import qualified Data.List.NonEmpty as NE
 import Data.Monoid (Sum(..))
+import Data.Witherable (mapMaybe)
 
 digits :: Integral a => a -> [a]
 digits = loop []
@@ -111,3 +114,23 @@ intersperseMap f g as = fold $ NE.toList $ extend go $ NE.fromList as
   where
     go (a :| [])    = [g a]
     go (a :| (b:_)) = [g a, f a b]
+
+data Node a = Node
+  { _position :: V2 Int
+  , _tile     :: a
+  } deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+makeLenses ''Node
+
+mkGraph2D :: (Graph g, G.Vertex g ~ Node a) => Map (V2 Int) a -> g
+mkGraph2D m = ifoldr go G.empty m
+  where
+    go p x g =
+      let ns = mapMaybe (\y -> Node y <$> Map.lookup y m) (neighbors2D p)
+      in G.overlay g (G.edges $ (Node p x,) <$> ns)
+
+neighbors2D :: V2 Int -> [V2 Int]
+neighbors2D p = [_x +~ 1, _x -~ 1, _y +~ 1, _y -~ 1] <&> ($ p)
+
+parseGrid :: (Ord i, FoldableWithIndex i f) => (a -> Maybe b) -> f (f a) -> Map (V2 i) b
+parseGrid f = ifoldMap \y -> ifoldMap \x -> maybe mempty (Map.singleton (V2 x y)) . f

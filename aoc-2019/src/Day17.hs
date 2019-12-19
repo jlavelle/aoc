@@ -7,18 +7,16 @@ import IntCode (parseProgram, interpretOut, interpretM, Interpret(..))
 import Linear.V2 (V2(..), _x, _y)
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Control.Lens (ifoldMap, (+~), (-~), (^.), (<&>), ifoldr, ix, (.~), (&))
+import Control.Lens ((^.), ix, (.~), (&))
 import Control.Monad.State (StateT, evalStateT, get, put)
 import Control.Monad.IO.Class (liftIO)
 import Data.Witherable (mapMaybe)
-import qualified Algebra.Graph.Class as G
-import Algebra.Graph.Class (Graph)
 import qualified Algebra.Graph.AdjacencyMap as AM
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Applicative ((<|>), liftA2)
 import Data.List (unfoldr, intersperse)
-import Util (eqOn)
+import Util (eqOn, parseGrid, mkGraph2D, neighbors2D, Node(..), position)
 import Control.Monad (guard)
 import Data.Functor (($>))
 
@@ -28,7 +26,7 @@ data Direction = N | E | S | W
 data Tile
   = Robot Direction
   | Scaffold
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data Turn = L | R
   deriving (Eq, Show)
@@ -68,9 +66,7 @@ parseTile = \case
   c   -> error $ "Unknown tile " <> show c
 
 runASCII :: [Int] -> Map (V2 Int) Tile
-runASCII = go . lines . fmap toEnum . flip interpretOut []
-  where
-    go = ifoldMap \y -> ifoldMap \x -> maybe mempty (Map.singleton (V2 x y)) . parseTile
+runASCII = parseGrid parseTile . lines . fmap toEnum . flip interpretOut []
 
 -- Run the program interactively with optional input
 asciiIO :: [Int] -> StateT String IO ()
@@ -89,28 +85,18 @@ intersections :: Map (V2 Int) Tile -> [V2 Int]
 intersections m = filter (`isIntersection` m) $ Map.keys m
 
 isIntersection :: V2 Int -> Map (V2 Int) Tile -> Bool
-isIntersection p m = length (mapMaybe (`Map.lookup` m) $ neighbors p) == 4
-
-neighbors :: V2 Int -> [V2 Int]
-neighbors p = [_x +~ 1, _x -~ 1, _y +~ 1, _y -~ 1] <&> ($ p)
-
-mkGraph :: (Graph g, G.Vertex g ~ V2 Int) => Map (V2 Int) Tile -> g
-mkGraph m = ifoldr go G.empty m
-  where
-    go p _ g =
-      let ns = filter (`Map.member` m) (neighbors p)
-      in G.overlay g (G.edges $ (p,) <$> ns)
+isIntersection p m = length (mapMaybe (`Map.lookup` m) $ neighbors2D p) == 4
 
 -- Ends are only adjacent to one other node
-endpoints :: Map (V2 Int) (Set (V2 Int)) -> (V2 Int, V2 Int)
+endpoints :: Foldable f => Map k (f a) -> (k, k)
 endpoints am =
   let [a, b] = Map.keys $ Map.filter ((== 1) . length) am
   in (a, b)
 
-straight :: [V2 Int] -> [V2 Int] -> Maybe (V2 Int)
+straight :: [Node Tile] -> [Node Tile] -> Maybe (Node Tile)
 straight (a:b:_) s =
-  let same | eqOn _x a b = Just _x
-           | eqOn _y a b = Just _y
+  let same | eqOn (position . _x) a b = Just (position . _x)
+           | eqOn (position . _y) a b = Just (position . _y)
            | otherwise = Nothing
   in same >>= \l -> foldr (go l) Nothing s
   where
@@ -118,11 +104,10 @@ straight (a:b:_) s =
              | otherwise = r
 straight _ _ = Nothing
 
-onlyOne :: [V2 Int] -> Maybe (V2 Int)
+onlyOne :: [Node Tile] -> Maybe (Node Tile)
 onlyOne [x] = Just x
 onlyOne _   = Nothing
 
--- TODO Fix this monstrosity
 tour :: Map (V2 Int) Tile -> [Instr]
 tour m = foldr alg [] $ unfoldr coalg (dir, [start])
   where
@@ -135,17 +120,18 @@ tour m = foldr alg [] $ unfoldr coalg (dir, [start])
       | otherwise =
           let moves  = getMoves a mv
               Just p = straight mv moves <|> onlyOne moves
-          in case getTurn d a p of
+          in case getTurn d (a ^. position) (p ^. position) of
             Just (t, d') -> Just (Turn t, (d', mv))
             Nothing      -> Just (Move 1, (d, p:mv))
 
-    am = AM.adjacencyMap $ mkGraph m
+    am :: Map (Node Tile) (Set (Node Tile))
+    am = AM.adjacencyMap $ mkGraph2D m
 
-    Just (Robot dir) = Map.lookup start m
+    Just (Robot dir) = Map.lookup (start ^. position) m
 
     (start, end) =
       let (ea, eb) = endpoints am
-      in case Map.lookup ea m of
+      in case Map.lookup (ea ^. position) m of
         Just (Robot _) -> (ea, eb)
         _ -> (eb, ea)
 
