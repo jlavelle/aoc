@@ -19,7 +19,7 @@ import Algebra.Graph.AdjacencyMap (AdjacencyMap)
 import qualified Algebra.Graph.AdjacencyMap as AM
 import Algebra.Graph.Class (Graph)
 import qualified Algebra.Graph.Class as G
-import Control.Monad.State (State, execState)
+import Control.Monad.State (State, execState, evalState, get, modify)
 import Control.Monad (unless, when)
 import Data.Foldable (fold)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -27,6 +27,7 @@ import Control.Comonad (extend)
 import qualified Data.List.NonEmpty as NE
 import Data.Monoid (Sum(..))
 import Data.Witherable (mapMaybe)
+import Data.Tree (Tree, unfoldTreeM_BF)
 
 digits :: Integral a => a -> [a]
 digits = loop []
@@ -98,6 +99,15 @@ bfsFrom a g = execState loop (BfsState (Set.singleton a) [pure a] []) ^. paths
       when (null adj) $ paths %= (as:)
       visited %= Set.union adj
       pure $ fmap (flip NE.cons as) (Set.toList adj)
+
+bfsTreeFrom :: forall a. Ord a => a -> AdjacencyMap a -> Tree a
+bfsTreeFrom s g = evalState (unfoldTreeM_BF go s) Set.empty
+  where
+    go n = do
+      vs <- get
+      let adj = Set.difference (adjacent n g) vs
+      modify $ Set.union adj
+      pure (n, Set.toList adj)
 
 adjacent :: Ord a => a -> AdjacencyMap a -> Set a
 adjacent a = fold . Map.lookup a . AM.adjacencyMap
