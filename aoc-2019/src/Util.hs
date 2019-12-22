@@ -12,7 +12,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Linear.V2 (V2(..), _x, _y)
 import Data.Ord (comparing)
-import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap, Getter, ifoldr, (+~), (-~), (<&>), FoldableWithIndex)
+import Control.Lens ((^.), (&), use, (.=), (%=), ifoldMap, Getter, ifoldr, (+~), (-~), (<&>), FoldableWithIndex, _1, _2, _3)
 import Control.Lens.TH (makeLenses)
 import Data.Maybe (fromJust)
 import Algebra.Graph.AdjacencyMap (AdjacencyMap)
@@ -21,7 +21,7 @@ import Algebra.Graph.Class (Graph)
 import qualified Algebra.Graph.Class as G
 import Control.Monad.State (State, execState, evalState, get, modify)
 import Control.Monad (unless, when)
-import Data.Foldable (fold)
+import Data.Foldable (fold, for_)
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Comonad (extend)
 import qualified Data.List.NonEmpty as NE
@@ -82,6 +82,7 @@ data BfsState a = BfsState
 
 makeLenses ''BfsState
 
+-- TODO Consolidate with bfsFromTo
 bfsFrom :: forall a. Ord a => a -> AdjacencyMap a -> [NonEmpty a]
 bfsFrom a g = execState loop (BfsState (Set.singleton a) [pure a] []) ^. paths
   where
@@ -108,6 +109,23 @@ bfsTreeFrom s g = evalState (unfoldTreeM_BF go s) Set.empty
       let adj = Set.difference (adjacent n g) vs
       modify $ Set.union adj
       pure (n, Set.toList adj)
+
+bfsFromTo :: forall a. Ord a => a -> Set a -> AdjacencyMap a -> Map a (NonEmpty a)
+bfsFromTo s t g = execState loop (Set.singleton s, [pure s], Map.empty) ^. _3
+  where
+    loop = do
+      qs <- use _2
+      unless (null qs) do
+        qs' <- traverse search qs
+        _2 .= fold qs'
+        loop
+
+    search as = do
+      vs <- use _1
+      let adj = Set.difference (adjacent (NE.head as) g) vs
+      for_ adj \a -> when (a `Set.member` t) $ _3 %= Map.insert a (NE.cons a as)
+      _1 %= Set.union adj
+      pure $ fmap (`NE.cons` as) $ Set.toList adj
 
 adjacent :: Ord a => a -> AdjacencyMap a -> Set a
 adjacent a = fold . Map.lookup a . AM.adjacencyMap
