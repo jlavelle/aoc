@@ -9,11 +9,8 @@ import Util (enumIndex)
 import Data.Text (Text)
 import qualified Data.Text.IO as T
 import Linear.V2 (V2(..), _x, _y)
-import Control.Lens ((+~), (-~), (^.), (&))
-import qualified Control.Foldl as F
-import Data.Ord (comparing)
+import Control.Lens ((+~), (-~))
 import Data.Bool (bool)
-import Data.Maybe (fromJust)
 import Util (renderMap)
 
 data Direction = N | E | S | W deriving (Show, Eq, Enum, Bounded)

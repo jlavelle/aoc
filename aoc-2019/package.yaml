@@ -41,6 +41,8 @@ dependencies:
 - megaparsec
 - monoidal-containers
 - witherable
+- psqueues
+- semigroupoids
 
 default-extensions:
 - LambdaCase
