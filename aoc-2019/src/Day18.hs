@@ -1,81 +1,60 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Day18 where
 
-import Linear.V2 (V2(..), _x, _y)
-import Util (mkGraph2D, parseGrid, Node(..), position, tile, bfsFromTo)
-import qualified Data.Map as Map
-import Data.Map (Map)
-import qualified Data.Set as Set
+import Linear.V2 (V2)
+import Algebra.Graph.Labelled.AdjacencyMap (AdjacencyMap)
+import qualified Algebra.Graph.Labelled.AdjacencyMap as AM
 import Data.Set (Set)
-import qualified Algebra.Graph.AdjacencyMap as AM
-import qualified Algebra.Graph.AdjacencyMap.Algorithm as AM
-import Algebra.Graph.AdjacencyMap (AdjacencyMap)
-import Data.Char (isUpper, isLower, toLower)
-import Control.Lens (ifind, (^.), ix, (.~), (&))
-import Control.Lens.TH (makePrisms)
+import qualified Data.Set as Set
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Control.Applicative ((<|>))
+import Control.Lens (preview, (^.), (&))
 import Control.Lens.Extras (is)
-import Data.Maybe (fromJust)
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Ord (comparing)
-import Data.Foldable (minimumBy)
+import Control.Lens.TH (makePrisms)
+import Data.Char (toLower, isUpper, isLower)
+import Util (neighbors2D, Node(..), tile)
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
+import Data.Witherable (mapMaybe)
+import Data.Maybe (isJust)
+import Data.Functor.Extend (extended)
 
 data Tile
-  = Wall
-  | Empty
+  = Empty
+  | Wall
   | Door Char
   | Key Char
   | You
-  deriving (Eq, Ord, Show)
+  deriving (Show, Eq, Ord)
 
 makePrisms ''Tile
 
-parseTile :: Char -> Tile
-parseTile = \case
-  '#' -> Wall
-  '.' -> Empty
-  '@' -> You
-  c | isUpper c -> Door c
-    | isLower c -> Key c
-    | otherwise -> error $ "Unknown char " <> [c]
+data Delver = Delver
+  { _position :: V2 Int
+  ,
+  }
 
-mkGraph :: Map (V2 Int) Tile -> AdjacencyMap (Node Tile)
-mkGraph m =
-  let (w, nw) = Map.partition walkable m
-  in AM.overlay (mkGraph2D w) (mkGraph2D nw)
+data S = S
+  { _delvers :: [Delver]
+  , _keys    :: Map (V2 Int) Char
+  , _doors   :: Map (V2 Int) Char
+  , _walls   :: Map (V2 Int) Char
+  ,
+  }
 
-walkable :: Tile -> Bool
-walkable = \case
-  Wall   -> False
-  Door _ -> False
-  _      -> True
+data F = F
+  { _es :: Map Char (Map Char Int)
+  }
 
-findYou :: Map (V2 Int) Tile -> Node Tile
-findYou = uncurry Node . fromJust . ifind (const $ is _You)
+init :: Map (V2 Int) Tile -> S
+init =
 
-openDoor :: Char -> Map (V2 Int) Tile -> Map (V2 Int) Tile
-openDoor c m =
-  let Just (p, _) = ifind door m
-  in m & ix p .~ Empty
-  where
-    door _ (Door c') = toLower c == toLower c'
-    door _ _ = False
+unfold :: (S -> ) -> f S
+unfold = undefined
 
-parseInput :: IO (Map (V2 Int) Tile)
-parseInput = parseGrid (Just . parseTile) . lines <$> readFile "inputs/day18"
+type G = Graph Int (Set Char)
 
--- Upper bound path that always takes the next shortest route
-greedyPath :: Map (V2 Int) Tile -> [(Node Tile, Int)]
-greedyPath m =
-  let g  = mkGraph m
-      y  = findYou m
-      ks = Set.fromList $ filter (\k -> k ^. tile & is _Key) $ AM.reachable y g
-      p@(n@(Node kp (Key x)) :| _) = minimumBy (comparing length) $ bfsFromTo y ks g
-      m' = m & openDoor x & ix kp .~ You & ix (y ^. position) .~ Empty
-  in if null ks then [] else (n, length p) : greedyPath m'
-
-solutions :: IO ()
-solutions = do
-  m <- parseInput
-  traverse print $ greedyPath m
-  pure ()
+neighbors :: Set Char -> G -> Map (Set Char) Int

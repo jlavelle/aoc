@@ -5,7 +5,7 @@ module Graph where
 import Linear.V2 (V2(..), _x, _y)
 import Control.Lens (Lens', _Wrapped', Wrapped, (%=), (.=), (^.), use, (<&>), FoldableWithIndex, ifor_)
 import Control.Lens.TH (makeLenses)
-import Control.Monad.State (get, evalState)
+import Control.Monad.State.Strict (get, evalState)
 import GHC.Generics (Generic)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -69,12 +69,11 @@ astar' start isGoal h adjacent = evalState go $ initAStar start $ h start
                 | otherwise         -> pure ()
         Nothing -> newPath curr n tgs
 
-      where
-        newPath c n tgs = do
-          let score = mkFCost tgs $ h n
-          asParent %= Map.insert n c
-          scores   %= Map.insert n score
-          openSet  %= PSQ.insert n score n
+    newPath c n tgs = do
+      let score = mkFCost tgs $ h n
+      asParent %= Map.insert n c
+      scores   %= Map.insert n score
+      openSet  %= PSQ.insert n score n
 
     dequeue = do
       mmv <- use openSet <&> PSQ.minView
